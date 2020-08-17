@@ -1,0 +1,292 @@
+
+```{r, include = FALSE}
+library(ggplot2)
+library(EDASeq)
+library(TCGAbiolinks)
+library(dplyr)
+library(DT)
+library(SummarizedExperiment)
+library(limma)
+library(edgeR)
+library(jtools)
+library(MASS)
+library(splines)
+library(tidyverse)
+library(interactions)
+library(readxl)
+library(preprocessCore)
+library(sjPlot)
+library(DESeq2)
+library(sjlabelled)
+library(sjmisc)
+library(NOISeq)
+```
+
+reading in the expression count data and removing "EnsembleID" from first entry of list of samples:
+```{r}
+data <- read.delim("~/Documents/project/BRCA_Primary_Tumor_HTSeq_counts.txt.txt")
+data <- data[c(1:60483),] #removing the last few genes from the dataframe which do not have an Ensembl ID assigned to them
+
+matrix <- data
+colnames(matrix) <- gsub('.', '-', colnames(matrix), fixed = TRUE)
+
+sampleslist <- colnames(matrix)
+sampleslist <- sampleslist[-1]
+```
+
+get TCGA breast cancer subtypes dataframe of the primary tumour expression data samples:
+```{r }
+CancerProject <- "TCGA-BRCA"
+query <- GDCquery(project = CancerProject, #getinfo on the samples I have
+                  data.category = "Transcriptome Profiling",
+                  data.type = "Gene Expression Quantification", 
+                  workflow.type = "HTSeq - Counts",
+                  barcode = sampleslist)
+samplesDown <- getResults(query,cols=c("cases"))
+samplesDown1 <- getResults(query)
+primarytumour <- TCGAquery_SampleTypes(barcode = samplesDown, typesample = "TP") #find out which are primary tumour
+laterquery <- GDCquery(project = CancerProject,
+                  data.category = "Transcriptome Profiling",
+                  data.type = "Gene Expression Quantification", 
+                  workflow.type = "HTSeq - Counts",
+                  barcode = primarytumour) #get info on the primary tumour samples of my data only
+samplesDownloaded <- getResults(laterquery,cols=c("cases"))
+datasubtypes <- TCGA_MolecularSubtype(samplesDownloaded) #get subtypes of this data
+datasubtypes <- datasubtypes$subtypes
+datasubtypes_m <- datasubtypes[complete.cases(datasubtypes),] #remove NAs
+```
+
+get the matrix of expression data TCGA sample barcode clinical data:
+```{r }
+clindata <- GDCdownload(laterquery) #possibly have to delete this later
+clinicaldata <- GDCprepare(laterquery)
+colData(clinicaldata)
+barcodesofEXPdata <- as.data.frame(colData(clinicaldata))
+barcodesofEXPdata <- barcodesofEXPdata[which(barcodesofEXPdata$gender == "female"),] # filter out the samples that are not female from the 
+```
+
+Order the data and match up the dataframes:
+```{r}
+matrix_temp <- matrix[,colnames(matrix) %in% c("ENSEMBL_GeneID", barcodesofEXPdata$patient)]
+matrix_temp <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", datasubtypes_m$patients)]# remove samples for which I don't have a subtype and which are not primary tumour
+matrix_temp[,1] <- substr(matrix_temp[,1], 1, nchar("ENSG00000000003"))
+rownames(matrix_temp) <- matrix_temp[,1]
+matrix_temp <- matrix_temp[,-1]
+#expression matrix for patients for which subtype data is KNOWN and duplicates are removed 
+datasubtypes_mytemp <- datasubtypes_m[datasubtypes_m$patients %in% colnames(matrix_temp),]
+
+#write.table(datasubtypes_my , file="~/Documents/project/datasubtypes_my.txt", sep="\t", quote=F)
+matrix_temp <- matrix_temp[,order(datasubtypes_mytemp$patients)]
+all.equal(as.character(colnames(matrix_temp)), datasubtypes_mytemp$patients)
+dim(matrix_temp)
+```
+
+import tumour purity data:
+
+```{r}
+    barcodes <- as.character(datasubtypes_mytemp$samples)
+    samples.id <- sapply(barcodes, function(x) paste(unlist(stringr::str_split(x, "-"))[1:4], collapse = "-"))
+    df.barcodes_sampID <- data.frame(barcodes=barcodes, sampID=samples.id, row.names = 1:length(barcodes))
+    filt.s <- c()
+    for(s in samples.id){
+        if(s %in% Tumor.purity$Sample.ID==FALSE)
+            filt.s <- c(filt.s, s)
+    }
+    samples.filtered<-unlist(samples.id[samples.id %in% filt.s == FALSE])
+    Tumor.purity.L <- Tumor.purity
+    Tumor.purity.L <- Tumor.purity.L[which(Tumor.purity.L$Sample.ID %in% samples.filtered),]
+    Tumor.purity.L$barcodes <- as.character(datasubtypes_mytemp$samples)
+    Tumor.purity.L$ESTIMATE <- as.numeric(gsub(",", ".", Tumor.purity.L$ESTIMATE))
+    Tumor.purity.L$ABSOLUTE <- as.numeric(gsub(",", ".", Tumor.purity.L$ABSOLUTE))
+    Tumor.purity.L$LUMP <- as.numeric(gsub(",", ".", Tumor.purity.L$LUMP))
+    Tumor.purity.L$IHC <- as.numeric(gsub(",", ".", Tumor.purity.L$IHC))
+    Tumor.purity.L$CPE <- as.numeric(gsub(",", ".", Tumor.purity.L$CPE))
+    rownames(Tumor.purity.L) <- substr(Tumor.purity.L$Sample.ID, 1, nchar("TCGA-3C-AAAU"))
+
+save(Tumor.purity.L, file="~/Documents/project/Tumor.purity.L.Rdata")
+```
+
+Match up the subtypes:
+```{r}
+rownames(datasubtypes_mytemp) <- datasubtypes_mytemp$patients
+datasubtypes_my <- datasubtypes_mytemp
+datasubtypes_my$subtype <- factor(datasubtypes_my$subtype)
+all.equal(rownames(datasubtypes_my), rownames(Tumor.purity.L))
+datasubtypes_my$CPE <- Tumor.purity.L$CPE
+datasubtypes_my$IHC <- Tumor.purity.L$IHC
+datasubtypes_my<-datasubtypes_my[complete.cases(datasubtypes_my$CPE),]
+
+matrix_temp <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", datasubtypes_my$patients)]
+save(matrix_temp, file="~/Documents/project/matrix_temp.Rdata")
+lumAsub <- datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]
+lumBsub <- datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]
+Basalsub <- datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]
+Normalsub <- datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]
+HER2sub <- datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]#
+
+lumAlumBdata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumAsub$patients, lumBsub$patients)]
+lumABasaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumAsub$patients, Basalsub$patients)]
+lumAHER2data <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumAsub$patients, HER2sub$patients)]
+lumANormaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumAsub$patients, Normalsub$patients)]
+lumBBasaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumBsub$patients, Basalsub$patients)]
+lumBNormaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumBsub$patients, Normalsub$patients)]
+lumBHER2data <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", lumBsub$patients, HER2sub$patients)]
+HER2Basaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", HER2sub$patients, Basalsub$patients)]
+BasalNormaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", Basalsub$patients, Normalsub$patients)]
+HER2Normaldata <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", HER2sub$patients, Normalsub$patients)]
+dds1CPE <- DESeqDataSetFromMatrix(countData = as.matrix(matrix_temp), colData = datasubtypes_my, design = ~ CPE)
+dds1CPE <- estimateSizeFactors(dds1CPE)
+normalized_counts1CPE <- counts(dds1CPE, normalized=TRUE)
+yCPE <- as.data.frame(log2(normalized_counts1CPE+1.0))
+save(yCPE, datasubtypes_my, file="~/Documents/project/normalisedALLandDATASUBTYPES_MY.Rdata")
+
+```
+
+load the pairwise median data and filter out the genes for which their median is 0:
+```{r}
+load("~/Documents/project/parwisemediandata.Rdata")
+
+keeplumAlumBdata <- medianlumAlumBdata >0
+lumAlumBdata <- lumAlumBdata[keeplumAlumBdata,]
+
+keeplumAHER2data <- medianlumAHER2data >0
+lumAHER2data <- lumAHER2data[keeplumAHER2data,]
+
+keeplumABasaldata <- medianlumABasaldata >0
+lumABasaldata <- lumABasaldata[keeplumABasaldata,]
+
+keeplumANormaldata <- medianlumANormaldata >0
+lumANormaldata <- lumANormaldata[keeplumANormaldata,]
+
+keeplumBNormaldata <- medianlumBNormaldata >0
+lumBNormaldata <- lumBNormaldata[keeplumBNormaldata,]
+
+keeplumBHER2data <- medianlumBHER2data >0
+lumBHER2data <- lumBHER2data[keeplumBHER2data,]
+
+keeplumBBasaldata <- medianlumBBasaldata >0
+lumBBasaldata <- lumBBasaldata[keeplumBBasaldata,]
+
+keepHER2Basaldata <- medianHER2Basaldata >0
+HER2Basaldata <- HER2Basaldata[keepHER2Basaldata,]
+
+keepHER2Normaldata <- medianHER2Normaldata >0
+HER2Normaldata <- HER2Normaldata[keepHER2Normaldata,]
+
+keepBasalNormaldata <- medianBasalNormaldata >0
+BasalNormaldata <- BasalNormaldata[keepBasalNormaldata,]
+```
+
+Construct the model matrices for each pair of subtypes for later linear regression analysis:
+```{r}
+model_lumAlumB <-datasubtypes_my[match(c(lumAsub$patients, lumBsub$patients), rownames(datasubtypes_my)),]
+model_lumABasal <-datasubtypes_my[match(c(lumAsub$patients, Basalsub$patients), rownames(datasubtypes_my)),]
+model_lumAHER2 <-datasubtypes_my[match(c(lumAsub$patients, HER2sub$patients), rownames(datasubtypes_my)),]
+model_lumANormal <-datasubtypes_my[match(c(lumAsub$patients, Normalsub$patients), rownames(datasubtypes_my)),]
+model_lumBBasal <-datasubtypes_my[match(c(lumBsub$patients, Basalsub$patients), rownames(datasubtypes_my)),]
+model_lumBNormal <-datasubtypes_my[match(c(lumBsub$patients, Normalsub$patients), rownames(datasubtypes_my)),]
+model_lumBHER2 <-datasubtypes_my[match(c(lumBsub$patients, HER2sub$patients), rownames(datasubtypes_my)),]
+model_HER2Basal <-datasubtypes_my[match(c(HER2sub$patients, Basalsub$patients), rownames(datasubtypes_my)),]
+model_HER2Normal <-datasubtypes_my[match(c(HER2sub$patients, Normalsub$patients), rownames(datasubtypes_my)),]
+model_BasalNormal <-datasubtypes_my[match(c(Basalsub$patients, Normalsub$patients), rownames(datasubtypes_my)),]
+
+
+g_lumAlumB <- c(rep(0, length(lumAsub$samples)), rep(1, length(lumBsub$samples)))
+model_lumAlumB$subtype <- as.character(g_lumAlumB)
+g_lumABasal <- c(rep(0, length(lumAsub$samples)), rep(1, length(Basalsub$samples)))
+model_lumABasal$subtype <- as.character(g_lumABasal)
+g_lumAHER2 <- c(rep(0, length(lumAsub$samples)), rep(1, length(HER2sub$samples)))
+model_lumAHER2$subtype <- as.character(g_lumAHER2)
+g_lumANormal <- c(rep(0, length(lumAsub$samples)), rep(1, length(Normalsub$samples)))
+model_lumANormal$subtype <- as.character(g_lumANormal)
+g_lumBBasal <- c(rep(0, length(lumBsub$samples)), rep(1, length(Basalsub$samples)))
+model_lumBBasal$subtype <- as.character(g_lumBBasal)
+g_lumBNormal <- c(rep(0, length(lumBsub$samples)), rep(1, length(Normalsub$samples)))
+model_lumBNormal$subtype <- as.character(g_lumBNormal)
+g_lumBHER2 <- c(rep(0, length(lumBsub$samples)), rep(1, length(HER2sub$samples)))
+model_lumBHER2$subtype <- as.character(g_lumBHER2)
+g_HER2Basal <- c(rep(0, length(HER2sub$samples)), rep(1, length(Basalsub$samples)))
+model_HER2Basal$subtype <- as.character(g_HER2Basal)
+g_HER2Normal <- c(rep(0, length(HER2sub$samples)), rep(1, length(Normalsub$samples)))
+model_HER2Normal$subtype <- as.character(g_HER2Normal)
+g_BasalNormal <- c(rep(0, length(Basalsub$samples)), rep(1, length(Normalsub$samples)))
+model_BasalNormal$subtype <- as.character(g_BasalNormal)
+
+
+model_lumAlumB$subtypeOP <- ifelse(model_lumAlumB$subtype == "0", "1", 0)
+model_lumABasal$subtypeOP <- ifelse(model_lumABasal$subtype == "0", "1", 0)
+model_lumAHER2$subtypeOP <- ifelse(model_lumAHER2$subtype == "0", "1", 0)
+model_lumANormal$subtypeOP <- ifelse(model_lumANormal$subtype == "0", "1", 0)
+model_lumBBasal$subtypeOP <- ifelse(model_lumBBasal$subtype == "0", "1", 0)
+model_lumBNormal$subtypeOP <- ifelse(model_lumBNormal$subtype == "0", "1", 0)
+model_lumBHER2$subtypeOP <- ifelse(model_lumBHER2$subtype == "0", "1", 0)
+model_HER2Basal$subtypeOP <- ifelse(model_HER2Basal$subtype == "0", "1", 0)
+model_HER2Normal$subtypeOP <- ifelse(model_HER2Normal$subtype == "0", "1", 0)
+model_BasalNormal$subtypeOP <- ifelse(model_BasalNormal$subtype == "0", "1", 0)
+```
+
+Normalisation using DESeq2 median of ratios approach:
+```{r}
+matrix_temp_2_lumAHER2 <- lumAHER2data
+matrix_temp_2_lumABasal <- lumABasaldata
+matrix_temp_2_lumAlumB <- lumAlumBdata
+matrix_temp_2_lumANormal <- lumANormaldata
+matrix_temp_2_lumBHER2 <- lumBHER2data
+matrix_temp_2_lumBBasal <- lumBBasaldata
+matrix_temp_2_lumBNormal <- lumBNormaldata
+matrix_temp_2_HER2Basal <- HER2Basaldata
+matrix_temp_2_HER2Normal <- HER2Normaldata
+matrix_temp_2_BasalNormal <- BasalNormaldata
+
+matrix_temp_2_lumAlumB1 <- matrix_temp_2_lumAlumB[,colnames(matrix_temp_2_lumAlumB) %in% rownames(model_lumAlumB)]
+matrix_temp_2_lumABasal1 <- matrix_temp_2_lumABasal[,colnames(matrix_temp_2_lumABasal) %in% rownames(model_lumABasal)]
+matrix_temp_2_lumAHER21 <- matrix_temp_2_lumAHER2[,colnames(matrix_temp_2_lumAHER2) %in% rownames(model_lumAHER2)]
+matrix_temp_2_lumANormal1 <- matrix_temp_2_lumANormal[,colnames(matrix_temp_2_lumANormal) %in% rownames(model_lumANormal)]
+matrix_temp_2_lumBBasal1 <- matrix_temp_2_lumBBasal[,colnames(matrix_temp_2_lumBBasal) %in% rownames(model_lumBBasal)]
+matrix_temp_2_lumBNormal1 <- matrix_temp_2_lumBNormal[,colnames(matrix_temp_2_lumBNormal) %in% rownames(model_lumBNormal)]
+matrix_temp_2_lumBHER21 <- matrix_temp_2_lumBHER2[,colnames(matrix_temp_2_lumBHER2) %in% rownames(model_lumBHER2)]
+matrix_temp_2_HER2Basal1 <- matrix_temp_2_HER2Basal[,colnames(matrix_temp_2_HER2Basal) %in% rownames(model_HER2Basal)]
+matrix_temp_2_HER2Normal1 <- matrix_temp_2_HER2Normal[,colnames(matrix_temp_2_HER2Normal) %in% rownames(model_HER2Normal)]
+matrix_temp_2_BasalNormal1 <- matrix_temp_2_BasalNormal[,colnames(matrix_temp_2_BasalNormal) %in% rownames(model_BasalNormal)]
+
+matrix_temp_2_lumAlumB1 <- matrix_temp_2_lumAlumB1[,rownames(model_lumAlumB)]
+matrix_temp_2_lumABasal1 <- matrix_temp_2_lumABasal1[,rownames(model_lumABasal)]
+matrix_temp_2_lumAHER21 <- matrix_temp_2_lumAHER21[,rownames(model_lumAHER2)]
+matrix_temp_2_lumANormal1 <- matrix_temp_2_lumANormal1[,rownames(model_lumANormal)]
+matrix_temp_2_lumBBasal1 <- matrix_temp_2_lumBBasal1[,rownames(model_lumBBasal)]
+matrix_temp_2_lumBNormal1 <- matrix_temp_2_lumBNormal1[,rownames(model_lumBNormal)]
+matrix_temp_2_lumBHER21 <- matrix_temp_2_lumBHER21[,rownames(model_lumBHER2)]
+matrix_temp_2_HER2Basal1 <- matrix_temp_2_HER2Basal1[,rownames(model_HER2Basal)]
+matrix_temp_2_HER2Normal1 <- matrix_temp_2_HER2Normal1[,rownames(model_HER2Normal)]
+matrix_temp_2_BasalNormal1 <- matrix_temp_2_BasalNormal1[,rownames(model_BasalNormal)]
+all.equal(colnames(matrix_temp_2_BasalNormal1),rownames(model_BasalNormal) )
+
+save(matrix_temp_2_lumAHER21, matrix_temp_2_lumABasal1,matrix_temp_2_lumAlumB1, matrix_temp_2_lumANormal1, matrix_temp_2_lumBHER21, matrix_temp_2_lumBBasal1, matrix_temp_2_lumBNormal1, matrix_temp_2_HER2Basal1, matrix_temp_2_HER2Normal1, matrix_temp_2_BasalNormal1, file="~/Documents/project/unnormaliseddata.Rdata")
+
+normalisation<-function(dataframe, model){
+  model$subtype <- factor(model$subtype)
+  dds1 <- DESeqDataSetFromMatrix(countData = as.matrix(dataframe), colData = model, design = ~ subtype*CPE)
+dds1 <- estimateSizeFactors(dds1)
+normalized_counts1 <- counts(dds1, normalized=TRUE)
+y <- log2(normalized_counts1+1.0)
+return(y)
+}
+
+dataHER2Normal <- normalisation(matrix_temp_2_HER2Normal1, model_HER2Normal)
+dataBasalNormal <- normalisation(matrix_temp_2_BasalNormal1, model_BasalNormal)
+dataHER2Basal <- normalisation(matrix_temp_2_HER2Basal1, model_HER2Basal)
+datalumBHER2 <- normalisation(matrix_temp_2_lumBHER21, model_lumBHER2)
+datalumBNormal <- normalisation(matrix_temp_2_lumBNormal1, model_lumBNormal)
+datalumBBasal <- normalisation(matrix_temp_2_lumBBasal1, model_lumBBasal)
+datalumAlumB <- normalisation(matrix_temp_2_lumAlumB1, model_lumAlumB)
+datalumANormal <- normalisation(matrix_temp_2_lumANormal1, model_lumANormal)
+datalumAHER2 <- normalisation(matrix_temp_2_lumAHER21, model_lumAHER2)
+datalumABasal <- normalisation(matrix_temp_2_lumABasal1, model_lumABasal)
+
+save(dataHER2Normal,datalumABasal, datalumAHER2, datalumANormal,datalumAlumB,datalumBBasal, datalumBNormal, datalumBHER2,dataHER2Basal, dataBasalNormal,  file="~/Documents/project/normaliseddata.Rdata")
+
+save(model_HER2Normal, model_BasalNormal, model_HER2Basal, model_lumBHER2, model_lumBNormal, model_lumBBasal, model_lumAlumB, model_lumANormal, model_lumAHER2, model_lumABasal, file="~/Documents/project/modelmatrices.Rdata")
+```
+
+
+
