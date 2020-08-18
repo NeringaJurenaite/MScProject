@@ -1,0 +1,68 @@
+Plot the density distributions of the IHC and CPE tumour purity estimates across all subtypes:
+```{r}
+library(colorspace)
+library(ggrepel)
+library(dplyr)
+library(tidyr)
+library(lattice)
+library(knitr)
+library(RColorBrewer)
+
+load("~/Documents/project/Tumor.purity.L.Rdata")
+plot(density(Tumor.purity.L[!is.na(Tumor.purity.L$CPE),]$CPE))
+Tumor.purity.Lp <- Tumor.purity.L[,c(1,6,7)] 
+TPlong <-Tumor.purity.Lp%>%
+  tidyr::gather( "type", "purity_fraction", -Sample.ID)
+# compute densities for yields
+barley_dens <- group_by(TPlong, type) %>% do(ggplot2:::compute_density(na.omit(.$purity_fraction), NULL)) %>%
+  dplyr::rename(purity_fraction = x)
+
+# get the maximum values
+barley_max <- filter(barley_dens, density == max(density)) %>%
+  ungroup() %>% mutate(hjust = c(1,  -1),  vjust = c(-1.5, 1.0))
+
+brewer.pal<- brewer.pal(n=8, name = 'Set1')
+cols<- brewer.pal[c(1,2,3,4,5)]
+
+ggplot(TPlong) + 
+  geom_density(aes(x = purity_fraction, color = type, fill=type), alpha=0.2) +
+  xlab("Tumour Purity") +
+
+  
+  scale_color_manual(values=darken(cols, 0.3),
+    guide = "none") +
+  
+  scale_fill_manual(values=cols,
+    guide = "none") +
+  theme_minimal() +
+  
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.title = element_blank())+facet_wrap(~type)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
