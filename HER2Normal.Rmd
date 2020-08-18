@@ -1,0 +1,618 @@
+
+
+```{r, include = FALSE} 
+library(ggplot2)#7 rows
+library(EDASeq)
+library(TCGAbiolinks)
+library(dplyr)
+library(DT)
+library(dplyr)
+library(SummarizedExperiment)
+library(limma)
+library(edgeR)
+library(jtools) # for summ()
+library(MASS)
+library(splines)
+library(tidyverse)
+library(ggplot2)
+library(interactions)
+library("readxl")
+library(preprocessCore)
+library(sjPlot)
+library(DESeq2)
+library(sjlabelled)
+library(sjmisc)
+library(ggplot2)
+library(NOISeq)
+library(tidyverse)
+library(fgsea)
+library(org.Hs.eg.db)
+library(dplyr)
+library(gage)
+library(fgsea)
+library(ggplot2)
+library(GSVAdata)
+library(org.Hs.eg.db)
+library(GSEABase)
+library("ggsci")
+library("gridExtra")
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+```
+
+```{r}
+
+load("~/Documents/project/normaliseddataCPE.Rdata")
+load("~/Documents/project/modelmatricesCPE.Rdata")
+#load(file="~/Documents/project/normaliseddata.Rdata")
+HER2Normal <- dataHER2Normal
+#load(file="~/Documents/project/modelmatrices.Rdata")
+
+
+```
+
+
+the MAIN model:
+```{r}
+XHER2Normal <- model.matrix(~ subtype * CPE, data=as.data.frame(model_HER2Normal))
+fitHER2Normal <- lmFit(as.data.frame(HER2Normal), XHER2Normal)
+
+#contr.matrix <- makeContrasts(SubvsCPE=subtype-CPE, Sub_CPE=subtype:CPE, levels = colnames(XHER2Normal))
+#contr.matrix
+#contrastsfitHER2Normal <- contrasts.fit(fitHER2Normal, contrasts=contr.matrix)
+#contrastsfitHER2Normal <- eBayes(contrastsfitHER2Normal)
+fitHER2Normal <- eBayes(fitHER2Normal)
+TTHER2Normal <- topTable(fitHER2Normal, number = dim(HER2Normal)[1])
+pvalsHER2Normal <- fitHER2Normal$p.value
+fdradjusted_pvalsHER2Normal <- p.adjust(pvalsHER2Normal[,4], method = "fdr")
+fdradjusted_pvalsHER2Normalsig <- fdradjusted_pvalsHER2Normal[which(fdradjusted_pvalsHER2Normal < 0.05)]
+names(fdradjusted_pvalsHER2Normalsig)
+top95HER2Normal <- TTHER2Normal[which(rownames(TTHER2Normal) %in% names(fdradjusted_pvalsHER2Normalsig)),]
+#plotMA(treatedTT4HER2Normal , alpha = 0.05,  main = "WT vs. SNF2  mutants", ylim = c(-4,4))
+#hist(TTHER2Normal$adj.P.Val ,col = "grey", border = "white", xlab = "", main = "frequencies  of p-values")
+plotSA(fitHER2Normal, main="Final model: Mean-variance trend")
+hist(fdradjusted_pvalsHER2Normal)
+treatedTT1HER2Normal <- topTreat(fitHER2Normal, coef=1, number=dim(HER2Normal)[1], lfc=1)
+treatedTT1HER2Normalsig <- treatedTT1HER2Normal[which(treatedTT1HER2Normal$adj.P.Val < 0.05),]
+treatedTT1HER2Normalsig
+treatedTT2HER2Normal <- topTreat(fitHER2Normal, coef=2, number=dim(HER2Normal)[1], lfc=1)
+treatedTT2HER2Normalsig <- treatedTT2HER2Normal[which(treatedTT2HER2Normal$adj.P.Val < 0.05),]
+treatedTT2HER2Normalsig
+treatedTT3HER2Normal <- topTreat(fitHER2Normal, coef=3, number=dim(HER2Normal)[1], lfc=1)
+treatedTT3HER2Normalsig <- treatedTT3HER2Normal[which(treatedTT3HER2Normal$adj.P.Val < 0.05),]
+treatedTT3HER2Normalsig
+treatedTT4HER2Normal <- topTreat(fitHER2Normal, coef=4, number=dim(HER2Normal)[1], lfc=1)
+treatedTT4HER2Normalsig <- treatedTT4HER2Normal[which(treatedTT4HER2Normal$adj.P.Val < 0.05),]
+treatedTT4HER2Normalsig
+#plot(density(treatedTT2HER2Normalsig$logFC))
+#ENSG00000122566
+#ENSG00000122566
+
+save(treatedTT4HER2Normalsig, treatedTT2HER2Normalsig, file="HER2NormaloutputCPE.Rdata")
+```
+
+
+
+
+
+
+```{r}
+plot(treatedTT4HER2Normal$logFC, -log10(treatedTT4HER2Normal$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT4HER2Normalsig$logFC, -log10(treatedTT4HER2Normalsig$adj.P.Val), col="red", pch="*")
+```
+
+plot for 1-tumour purity linear models:
+
+```{r}
+nmodel_HER2Normal <-model_HER2Normal
+nmodel_HER2Normal$CPE <- (1- nmodel_HER2Normal$CPE)
+nXHER2Normal <- model.matrix(~ subtype * CPE, data=as.data.frame(nmodel_HER2Normal))
+nfitHER2Normal <- lmFit(as.data.frame(HER2Normal), nXHER2Normal)
+
+nfitHER2Normal <- eBayes(nfitHER2Normal)
+nTTHER2Normal<- topTable(nfitHER2Normal, number = dim(HER2Normal)[1])
+npvalsHER2Normal <- nfitHER2Normal$p.value
+nfdradjusted_pvalsHER2Normal <- p.adjust(npvalsHER2Normal[,4], method = "fdr")
+nfdradjusted_pvalsHER2Normalsig <- nfdradjusted_pvalsHER2Normal[which(nfdradjusted_pvalsHER2Normal < 0.05)]
+names(nfdradjusted_pvalsHER2Normalsig)
+ntop95HER2Normal <- nTTHER2Normal[which(rownames(nTTHER2Normal) %in% names(nfdradjusted_pvalsHER2Normalsig)),]
+
+ntreatedTT1HER2Normal <- topTreat(nfitHER2Normal, coef=1, number=dim(HER2Normal)[1], lfc=1)
+ntreatedTT1HER2Normalsig <- ntreatedTT1HER2Normal[which(ntreatedTT1HER2Normal$adj.P.Val < 0.05),]
+ntreatedTT1HER2Normalsig
+ntreatedTT2HER2Normal <- topTreat(nfitHER2Normal, coef=2, number=dim(HER2Normal)[1], lfc=1)
+ntreatedTT2HER2Normalsig <- ntreatedTT2HER2Normal[which(ntreatedTT2HER2Normal$adj.P.Val < 0.05),]
+ntreatedTT2HER2Normalsig
+ntreatedTT3HER2Normal <- topTreat(nfitHER2Normal, coef=3, number=dim(HER2Normal)[1], lfc=1)
+ntreatedTT3HER2Normalsig <- ntreatedTT3HER2Normal[which(ntreatedTT3HER2Normal$adj.P.Val < 0.05),]
+ntreatedTT3HER2Normalsig
+ntreatedTT4HER2Normal <- topTreat(nfitHER2Normal, coef=4, number=dim(HER2Normal)[1], lfc=1)
+ntreatedTT4HER2Normalsig <- ntreatedTT4HER2Normal[which(ntreatedTT4HER2Normal$adj.P.Val < 0.05),]
+ntreatedTT4HER2Normalsig
+```
+
+single linear model for 1-tumour purity:
+```{r}
+nCPEmodel_HER2Normal <- as.data.frame(model_HER2Normal)
+nCPEmodel_HER2Normal$CPE <- (nCPEmodel_HER2Normal$CPE)
+nthelm2HER2Normal <- lm(HER2Normal[17876,] ~ subtype * CPE, data=nCPEmodel_HER2Normal)
+
+plot_model(nthelm2HER2Normal, type = "pred", terms = c( "CPE","subtype"))
+which(rownames(HER2Normal) == "ENSG00000214688") # this is a gene responsible for ER expression
+```
+
+```{r}
+normalHER2Normal <- treatedTT2HER2Normalsig[which(rownames(treatedTT2HER2Normalsig) %in% rownames(treatedTT4HER2Normalsig)),]
+normalHER2Normal <- normalHER2Normal[which(!rownames(normalHER2Normal) %in% rownames(ntreatedTT2HER2Normalsig)),]
+
+cancerHER2Normal <- ntreatedTT2HER2Normalsig[which(rownames(ntreatedTT2HER2Normalsig) %in% rownames(ntreatedTT4HER2Normalsig)),]
+cancerHER2Normal <- cancerHER2Normal[which(!rownames(cancerHER2Normal) %in% rownames(treatedTT2HER2Normalsig)),]
+cancerHER2Normal
+normalHER2Normal 
+
+save(cancerHER2Normal, normalHER2Normal, file="HER2Normal_C_N_CPE.Rdata")
+```
+
+```{r}
+
+mypal = pal_d3("category10", alpha = 0.7)(9)
+cb3 <-mypal[c(1,4,3)]
+treatedTT4HER2Normalsig$status <- ifelse(rownames(treatedTT4HER2Normalsig) %in% rownames(cancerHER2Normal), "Within Cancer Cells", ifelse(rownames(treatedTT4HER2Normalsig) %in% rownames(normalHER2Normal), "Within Normal Cells", "Both"))
+treatedTT4HER2Normalsig$colour <- ifelse(rownames(treatedTT4HER2Normalsig) %in% rownames(cancerHER2Normal), cb3[2], ifelse(rownames(treatedTT4HER2Normalsig) %in% rownames(normalHER2Normal), cb3[3], cb3[1]))
+genesHER2Normal <- ensembldb::select(EnsDb.Hsapiens.v86, keys= rownames(treatedTT4HER2Normalsig), keytype =   "GENEID", columns = c(  "GENEID", "SYMBOL", "ENTREZID"))
+genesHER2Normal <- genesHER2Normal[!duplicated(genesHER2Normal$GENEID),]
+genesHER2Normal$logFC <- treatedTT4HER2Normalsig[which(rownames(treatedTT4HER2Normalsig) %in% genesHER2Normal$GENEID),][genesHER2Normal$GENEID,]$logFC
+genesHER2Normal$status <- treatedTT4HER2Normalsig[which(rownames(treatedTT4HER2Normalsig) %in% genesHER2Normal$GENEID),][genesHER2Normal$GENEID,]$status
+HER2Normalsigs <- ggplot(genesHER2Normal, (aes(x = reorder(SYMBOL, -logFC), y = logFC, fill=status))) + 
+  geom_col(width=0.7) +
+   ggtitle("HER2-enriched vs Normal-like Significantly Differentially Expressed Genes") +
+  scale_y_continuous(name = "Log Fold Change") +
+  scale_fill_manual(values=cb3)+theme_bw()+
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+            plot.title = element_text(size = 11.5, face="bold"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      #axis.text.x = element_text(size = 6, angle = 60, vjust = 1, hjust = 1),
+      axis.title.x = element_blank(),
+      plot.margin = margin(6, 6, 3, 3),
+      panel.background=element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.2, linetype = 'solid',colour = "white"),
+      panel.ontop = TRUE, 
+      legend.position= c(0.6, 0.92), legend.direction="horizontal",
+      legend.text = element_text(size = 6), # legend text  was a little large
+      legend.key.size = unit(0.6, "lines"),
+      legend.title = element_blank())# legend keys were a little large
+
+ggsave("HER2NormalsigsCPE.png")
+
+
+
+mypal = pal_d3("category10", alpha = 0.7)(9)
+cb2 <-mypal[c(4,3)]
+cancernormalonlyHER2Normal <-genesHER2Normal[which(genesHER2Normal$status != "Both"),]
+cancernormalonlyHER2Normalgraph <- ggplot(cancernormalonlyHER2Normal, (aes(x = reorder(SYMBOL, -logFC), y = logFC, fill=status))) + 
+  geom_col(width=0.7) +
+   ggtitle("HER2-enriched vs Normal-like Significantly Differentially Expressed Genes") +
+  scale_y_continuous(name = "Log Fold Change") +
+  scale_fill_manual(values=cb2)+theme_bw()+
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+            plot.title = element_text(size = 11.5, face="bold"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      #axis.text.x = element_text(size = 6, angle = 60, vjust = 1, hjust = 1),
+      axis.title.x = element_blank(),
+      plot.margin = margin(6, 6, 3, 3),
+      panel.background=element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.2, linetype = 'solid',colour = "white"),
+      panel.ontop = TRUE, 
+      legend.position= c(0.6, 0.92), legend.direction="horizontal",
+      legend.text = element_text(size = 6), # legend text  was a little large
+      legend.key.size = unit(0.6, "lines"),
+      legend.title = element_blank())# legend keys were a little large
+
+ggsave("cancernormalonlyHER2NormalCPE.png")
+```
+
+Simple linear model NO interaciton:
+
+the MAIN model:
+```{r}
+XHER2Normals <- model.matrix(~ subtype + CPE, data=as.data.frame(model_HER2Normal))
+fitHER2Normals <- lmFit(as.data.frame(HER2Normal), XHER2Normals)
+fitHER2Normals <- eBayes(fitHER2Normals)
+TTHER2Normals <- topTable(fitHER2Normals, number = dim(HER2Normal)[1])
+pvalsHER2Normals <- fitHER2Normals$p.value
+fdradjusted_pvalsHER2NormalINTERs <- p.adjust(pvalsHER2Normals[,1], method = "fdr")
+fdradjusted_pvalsHER2NormalsigINTERs <- fdradjusted_pvalsHER2NormalINTERs[which(fdradjusted_pvalsHER2NormalINTERs < 0.05)]
+length(names(fdradjusted_pvalsHER2NormalsigINTERs))
+fdradjusted_pvalsHER2NormalSUBs <- p.adjust(pvalsHER2Normals[,2], method = "fdr")
+fdradjusted_pvalsHER2NormalsigSUBs <- fdradjusted_pvalsHER2NormalSUBs[which(fdradjusted_pvalsHER2NormalSUBs < 0.05)]
+length(names(fdradjusted_pvalsHER2NormalsigSUBs))
+fdradjusted_pvalsHER2NormalCPEs <- p.adjust(pvalsHER2Normals[,3], method = "fdr")
+fdradjusted_pvalsHER2NormalsigCPEs <- fdradjusted_pvalsHER2NormalCPEs[which(fdradjusted_pvalsHER2NormalCPEs < 0.05)]
+length(names(fdradjusted_pvalsHER2NormalsigCPEs))
+plotSA(fitHER2Normals, main="Final model: Mean-variance trend")
+hist(fdradjusted_pvalsHER2NormalSUBs)
+
+treatedTT1HER2Normals <- topTreat(fitHER2Normals, coef=1, number=dim(HER2Normal)[1])
+treatedTT1HER2Normalsigs <- treatedTT1HER2Normals[which(treatedTT1HER2Normals$adj.P.Val < 0.05),]
+treatedTT1HER2Normalsigs
+treatedTT2HER2Normals <- topTreat(fitHER2Normals, coef=2, number=dim(HER2Normal)[1])
+treatedTT2HER2Normalsigs <- treatedTT2HER2Normals[which(treatedTT2HER2Normals$adj.P.Val < 0.05),]
+treatedTT2HER2Normalsigs
+treatedTT3HER2Normals <- topTreat(fitHER2Normals, coef=3, number=dim(HER2Normal)[1])
+treatedTT3HER2Normalsigs <- treatedTT3HER2Normals[which(treatedTT3HER2Normals$adj.P.Val < 0.05),]
+treatedTT3HER2Normalsigs
+
+
+treatedTT2HER2Normalsigs[which(rownames(treatedTT2HER2Normalsigs) %in% rownames(treatedTT4HER2Normalsig)),]
+treatedTT2HER2Normalsigs[which(rownames(treatedTT2HER2Normalsigs) %in% rownames(cancerHER2Normal)),]
+treatedTT2HER2Normalsigs[which(rownames(treatedTT2HER2Normalsigs) %in% rownames(normalHER2Normal)),]
+```
+
+```{r}
+plot(treatedTT4HER2Normal$logFC, -log10(treatedTT4HER2Normal$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT4HER2Normalsig$logFC, -log10(treatedTT4HER2Normalsig$adj.P.Val), col="red", pch="*")
+```
+
+plot for 1-tumour purity linear models:
+
+```{r}
+nmodel_HER2Normals <- model_HER2Normal
+nmodel_HER2Normals$CPE <- (1- nmodel_HER2Normals$CPE)
+nXHER2Normals <- model.matrix(~ subtype + CPE, data=as.data.frame(nmodel_HER2Normals))
+nfitHER2Normals <- lmFit(as.data.frame(HER2Normal), nXHER2Normals)
+nfitHER2Normals <- eBayes(nfitHER2Normals)
+nTTHER2Normals<- topTable(nfitHER2Normals, number = dim(HER2Normal)[1])
+npvalsHER2Normals <- nfitHER2Normals$p.value
+ntreatedTT1HER2Normals <- topTreat(nfitHER2Normals, coef=1, number=dim(HER2Normal)[1])
+ntreatedTT1HER2Normalsigs <- ntreatedTT1HER2Normals[which(ntreatedTT1HER2Normals$adj.P.Val < 0.05),]
+ntreatedTT1HER2Normalsigs
+ntreatedTT2HER2Normals <- topTreat(nfitHER2Normals, coef=2, number=dim(HER2Normal)[1])
+ntreatedTT2HER2Normalsigs <- ntreatedTT2HER2Normals[which(ntreatedTT2HER2Normals$adj.P.Val < 0.05),]
+ntreatedTT2HER2Normalsigs
+#ntreatedTT2HER2Normalsigs[which(rownames(ntreatedTT2HER2Normalsigs) %in% rownames(normalHER2Normal)),]
+ntreatedTT3HER2Normals <- topTreat(nfitHER2Normals, coef=3, number=dim(HER2Normal)[1])
+ntreatedTT3HER2Normalsigs <- ntreatedTT3HER2Normals[which(ntreatedTT3HER2Normals$adj.P.Val < 0.05),]
+ntreatedTT3HER2Normalsigs
+```
+
+
+
+
+single linear model for 1-tumour purity:
+```{r}
+nCPEmodel_HER2Normals <- as.data.frame(nmodel_HER2Normals)
+nCPEmodel_HER2Normals$CPE <- (1- nCPEmodel_HER2Normals$CPE)
+nthelm2HER2Normals <- lm(HER2Normal[5015,] ~ subtype + CPE, data=nCPEmodel_HER2Normals)
+
+plot_model(nthelm2HER2Normals, type = "pred", terms = c( "CPE","subtype"))
+which(rownames(HER2Normal) == "ENSG00000122566")
+```
+
+plot adj p values:
+```{r}
+qqnorm(ntreatedTT2HER2Normals$adj.P.Val, pch = 1, frame = FALSE)
+qqline(ntreatedTT2HER2Normals$adj.P.Val, col = "steelblue", lwd = 2)
+```
+
+
+merged linear plot for top10:
+```{r}
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+library(xtable)
+Subtype_names <- c("HER2-enriched", "Normal-like")
+CPEmodel_HER2Normal <- as.data.frame(model_HER2Normal)
+genes <- ensembldb::select(EnsDb.Hsapiens.v86, keys= rownames(treatedTT1HER2Normalsig), keytype =   "GENEID", columns = c(  "GENEID", "SYMBOL", "ENTREZID"))
+genes<- genes[!duplicated(genes$GENEID),]
+
+top10Genes <- genes[which(genes$GENEID %in% c("ENSG00000141510", "ENSG00000121879", "ENSG00000039068", "ENSG00000107485", "ENSG00000055609", "ENSG00000095015","ENSG00000171862", "ENSG00000141027" , "ENSG00000159216", "ENSG00000117713")),]
+top10Genes <- top10Genes[order(top10Genes$GENEID),]
+top10GenesHER2Normal <- HER2Normal[which(rownames(HER2Normal) %in% c("ENSG00000141510", "ENSG00000121879", "ENSG00000039068", "ENSG00000107485", "ENSG00000055609", "ENSG00000095015","ENSG00000171862", "ENSG00000141027" , "ENSG00000159216", "ENSG00000117713")),]
+#top10GenesHER2Normal[top10Genes$GENEID,]
+top10GenesHER2Normal <- top10GenesHER2Normal[order(rownames(top10GenesHER2Normal)),]
+dim(top10GenesHER2Normal)
+all.equal(rownames(top10GenesHER2Normal), top10Genes$GENEID)
+rownames(top10GenesHER2Normal) <- top10Genes$SYMBOL
+top10lmHER2Normal <-  numeric(length = nrow(top10GenesHER2Normal))
+plotHER2NormalCPE1 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[1,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[1])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(color = "red",face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank(),legend.position = c(0.05, 0.05),
+    legend.justification = c("left", "bottom"),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE1, file=paste0("~/Documents/project/plots/HER2NormalCPE_111.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotHER2NormalCPE2 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[2,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[2])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE2, file=paste0("~/Documents/project/plots/HER2NormalCPE_211.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotHER2NormalCPE3 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[3,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[3])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE3, file=paste0("~/Documents/project/plots/HER2NormalCPE_311.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotHER2NormalCPE4 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[4,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[4])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE4, file=paste0("~/Documents/project/plots/HER2NormalCPE_411.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotHER2NormalCPE5 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[5,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[5])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE5, file=paste0("~/Documents/project/plots/HER2NormalCPE_511.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotHER2NormalCPE6 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[6,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[6])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE6, file=paste0("~/Documents/project/plots/HER2NormalCPE_611.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotHER2NormalCPE7 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[7,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[7])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE7, file=paste0("~/Documents/project/plots/HER2NormalCPE_711.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotHER2NormalCPE8 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[8,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[8])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE8, file=paste0("~/Documents/project/plots/HER2NormalCPE_811.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotHER2NormalCPE9 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[9,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesHER2Normal)[9])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE9, file=paste0("~/Documents/project/plots/HER2NormalCPE_911.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotHER2NormalCPE10 <- ggplot(CPEmodel_HER2Normal ,aes(y=top10GenesHER2Normal[10,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+     ggtitle(rownames(top10GenesHER2Normal)[10])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotHER2NormalCPE10, file=paste0("~/Documents/project/plots/HER2NormalCPE_1011.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+mergedCPEHER2Normal <-cowplot::plot_grid(plotHER2NormalCPE1, plotHER2NormalCPE2 + theme(legend.position="none"), plotHER2NormalCPE3 + theme(legend.position="none"),plotHER2NormalCPE4 + theme(legend.position="none"), plotHER2NormalCPE5 + theme(legend.position="none"), plotHER2NormalCPE6 + theme(legend.position="none"),plotHER2NormalCPE7 + theme(legend.position="none"), plotHER2NormalCPE8 + theme(legend.position="none"), plotHER2NormalCPE9 + theme(legend.position="none"),plotHER2NormalCPE10 + theme(legend.position="none"), align = "hv", ncol=5)
+
+ggsave(mergedCPEHER2Normal, file=paste0("~/Documents/project/plots/mergedCPEHER2Normal.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+```
+
+NO tumour purity effect taken into account:
+
+the MAIN model:
+```{r}
+XHER2Normalss <- model.matrix(~ subtype, data=as.data.frame(model_HER2Normal))
+fitHER2Normalss <- lmFit(as.data.frame(HER2Normal), XHER2Normalss)
+
+fitHER2Normalss <- eBayes(fitHER2Normalss)
+TTHER2Normalss <- topTable(fitHER2Normalss, number = dim(HER2Normal)[1])
+pvalsHER2Normalss <- fitHER2Normalss$p.value
+fdradjusted_pvalsHER2NormalINTERss <- p.adjust(pvalsHER2Normalss[,1], method = "fdr")
+fdradjusted_pvalsHER2NormalsigINTERss <- fdradjusted_pvalsHER2NormalINTERss[which(fdradjusted_pvalsHER2NormalINTERss < 0.05)]
+length(names(fdradjusted_pvalsHER2NormalsigINTERss))
+plotSA(fitHER2Normalss, main="Final model: Mean-variance trend")
+
+treatedTT1HER2Normalss <- topTreat(fitHER2Normalss, coef=1, number=dim(HER2Normal)[1], lfc=1)
+treatedTT1HER2Normalsigss <- treatedTT1HER2Normalss[which(treatedTT1HER2Normalss$adj.P.Val < 0.05),]
+treatedTT1HER2Normalsigss
+```
+
+```{r}
+plot(treatedTT1HER2Normalss$logFC, -log10(treatedTT1HER2Normalss$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT1HER2Normalsigss$logFC, -log10(treatedTT1HER2Normalsigss$adj.P.Val), col="red", pch="*")
+```
+
+plot QQ plots adj p values:
+```{r}
+#qqnorm(ntreatedTT4HER2Normal$adj.P.Val, pch = 1, frame = FALSE)
+#qqline(ntreatedTT4HER2Normal$adj.P.Val, col = "steelblue", lwd = 2)
+
+#' QQ-plot of the simulated P-values for bulk, cancer model and random CPE model.
+nconvSort4 <- sort(-log10(ntreatedTT4HER2Normal$adj.P.Val), decreasing=T)
+nconvSort3 <- sort(-log10(ntreatedTT3HER2Normal$adj.P.Val), decreasing=T)
+nconvSort2 <- sort(-log10(ntreatedTT2HER2Normal$adj.P.Val), decreasing=T)
+nconvSort1 <- sort(-log10(ntreatedTT1HER2Normal$adj.P.Val), decreasing=T)
+convSort4 <- sort(-log10(treatedTT4HER2Normal$adj.P.Val), decreasing=T)
+convSort3 <- sort(-log10(treatedTT3HER2Normal$adj.P.Val), decreasing=T)
+convSort2 <- sort(-log10(treatedTT2HER2Normal$adj.P.Val), decreasing=T)
+convSort1 <- sort(-log10(treatedTT1HER2Normal$adj.P.Val), decreasing=T)
+
+nconvSort1s <- sort(-log10(ntreatedTT1HER2Normals$adj.P.Val), decreasing=T)
+convSort1s <- sort(-log10(treatedTT1HER2Normals$adj.P.Val), decreasing=T)
+nconvSort2s <- sort(-log10(ntreatedTT2HER2Normals$adj.P.Val), decreasing=T)
+convSort2s <- sort(-log10(treatedTT2HER2Normals$adj.P.Val), decreasing=T)
+nconvSort3s <- sort(-log10(ntreatedTT3HER2Normals$adj.P.Val), decreasing=T)
+convSort3s <- sort(-log10(treatedTT3HER2Normals$adj.P.Val), decreasing=T)
+
+convSort1ss <- sort(-log10(treatedTT1HER2Normalsigss$adj.P.Val), decreasing=T)
+#' Make a QQ plot 
+plot(-log10(1:length(ntreatedTT1HER2Normals$adj.P.Val) / length(ntreatedTT1HER2Normals$adj.P.Val)), nconvSort1s, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l",  pch=17)
+points(-log10(1:length(ntreatedTT2HER2Normals$adj.P.Val) / length(ntreatedTT2HER2Normals$adj.P.Val)), nconvSort2s, col="#ff99c2", pch=17)
+points(-log10(1:length(ntreatedTT3HER2Normals$adj.P.Val) / length(ntreatedTT3HER2Normals$adj.P.Val)), nconvSort3s, col="#cc0052", pch=17)
+points(-log10(1:length(treatedTT1HER2Normalss$adj.P.Val) / length(treatedTT1HER2Normalss$adj.P.Val)), convSort1ss, col="orange", pch=1)
+points(-log10(1:length(ntreatedTT4HER2Normal$adj.P.Val) / length(ntreatedTT4HER2Normal$adj.P.Val)), nconvSort4, col="#ccd9ff")
+points(-log10(1:length(ntreatedTT2HER2Normal$adj.P.Val) / length(ntreatedTT2HER2Normal$adj.P.Val)), nconvSort2, col="#668cff")
+points(-log10(1:length(ntreatedTT3HER2Normal$adj.P.Val) / length(ntreatedTT3HER2Normal$adj.P.Val)), nconvSort3, col="#0033cc")
+points(-log10(1:length(ntreatedTT1HER2Normal$adj.P.Val) / length(ntreatedTT1HER2Normal$adj.P.Val)), nconvSort1, col="#002699")
+abline(0,1, col="red")
+
+plot(-log10(1:length(ntreatedTT1HER2Normal$adj.P.Val) / length(ntreatedTT1HER2Normal$adj.P.Val)), nconvSort1, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT4HER2Normal$adj.P.Val) / length(ntreatedTT4HER2Normal$adj.P.Val)), nconvSort4, col="#ff4d94")
+points(-log10(1:length(ntreatedTT2HER2Normal$adj.P.Val) / length(ntreatedTT2HER2Normal$adj.P.Val)), nconvSort2, col="#ff99c2")
+points(-log10(1:length(ntreatedTT3HER2Normal$adj.P.Val) / length(ntreatedTT3HER2Normal$adj.P.Val)), nconvSort3, col="#cc0052")
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT1HER2Normal$adj.P.Val) / length(treatedTT1HER2Normal$adj.P.Val)), convSort1, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(treatedTT3HER2Normal$adj.P.Val) / length(treatedTT3HER2Normal$adj.P.Val)), convSort3, col="#ff4d94")
+points(-log10(1:length(treatedTT4HER2Normal$adj.P.Val) / length(treatedTT4HER2Normal$adj.P.Val)), convSort4, col="#ff99c2")
+points(-log10(1:length(treatedTT2HER2Normal$adj.P.Val) / length(treatedTT2HER2Normal$adj.P.Val)), convSort2, col="#cc0052")
+abline(0,1, col="red")
+
+
+plot(-log10(1:length(treatedTT2HER2Normal$adj.P.Val) / length(treatedTT2HER2Normal$adj.P.Val)), convSort2, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="orange", bty="l")
+points(-log10(1:length(ntreatedTT2HER2Normal$adj.P.Val) / length(ntreatedTT2HER2Normal$adj.P.Val)), nconvSort2, col="#809fff")
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT3HER2Normal$adj.P.Val) / length(treatedTT3HER2Normal$adj.P.Val)), convSort3, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT3HER2Normal$adj.P.Val) / length(ntreatedTT3HER2Normal$adj.P.Val)), nconvSort3, col="#0040ff", pch=4)
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT4HER2Normal$adj.P.Val) / length(treatedTT4HER2Normal$adj.P.Val)), convSort4, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT4HER2Normal$adj.P.Val) / length(ntreatedTT4HER2Normal$adj.P.Val)), nconvSort4, col="#0040ff", pch=4)
+abline(0,1, col="red")
+```
+
+
+
+
+
+
