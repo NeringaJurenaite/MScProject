@@ -128,7 +128,7 @@ ggplot(datasubtypes_my1) +
 
 
 
-ggplot(datasubtypes_my1) + 
+densities <- ggplot(datasubtypes_my1) + 
   geom_density(aes(x = CPE, color = subtype, fill=subtype), alpha=0.2) +
   xlab("Tumour Purity (CPE)") +
   ylab("Density")+
@@ -148,6 +148,12 @@ ggplot(datasubtypes_my1) +
         panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
         plot.title = element_blank())
+        
+library(ggpubr)
+ggarrange( densities, violin, heights = c(5, 5),
+          labels = c("A", "B")+ font("x.text", size = 10), ncol = 1, nrow = 2, align = "v")
+
+ggsave("CPE.png")
 ```
 
 
