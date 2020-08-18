@@ -58,11 +58,11 @@ datasubtypes_m <- datasubtypes[complete.cases(datasubtypes),] #remove NAs
 
 get the matrix of expression data TCGA sample barcode clinical data:
 ```{r }
-clindata <- GDCdownload(laterquery) #possibly have to delete this later
+clindata <- GDCdownload(laterquery)
 clinicaldata <- GDCprepare(laterquery)
 colData(clinicaldata)
 barcodesofEXPdata <- as.data.frame(colData(clinicaldata))
-barcodesofEXPdata <- barcodesofEXPdata[which(barcodesofEXPdata$gender == "female"),] # filter out the samples that are not female from the 
+barcodesofEXPdata <- barcodesofEXPdata[which(barcodesofEXPdata$gender == "female"),] # filter out the samples that are not female 
 ```
 
 Order the data and match up the dataframes:
