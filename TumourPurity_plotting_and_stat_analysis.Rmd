@@ -8,17 +8,18 @@ library(lattice)
 library(knitr)
 library(RColorBrewer)
 
+load("~/Documents/project/datasubtypes_my.Rdata")
 load("~/Documents/project/Tumor.purity.L.Rdata")
 plot(density(Tumor.purity.L[!is.na(Tumor.purity.L$CPE),]$CPE))
 Tumor.purity.Lp <- Tumor.purity.L[,c(1,6,7)] 
 TPlong <-Tumor.purity.Lp%>%
   tidyr::gather( "type", "purity_fraction", -Sample.ID)
 # compute densities for yields
-barley_dens <- group_by(TPlong, type) %>% do(ggplot2:::compute_density(na.omit(.$purity_fraction), NULL)) %>%
+sub_dens <- group_by(TPlong, type) %>% do(ggplot2:::compute_density(na.omit(.$purity_fraction), NULL)) %>%
   dplyr::rename(purity_fraction = x)
 
 # get the maximum values
-barley_max <- filter(barley_dens, density == max(density)) %>%
+sub_max <- filter(sub_dens, density == max(density)) %>%
   ungroup() %>% mutate(hjust = c(1,  -1),  vjust = c(-1.5, 1.0))
 
 brewer.pal<- brewer.pal(n=8, name = 'Set1')
@@ -42,9 +43,112 @@ ggplot(TPlong) +
         plot.title = element_blank())+facet_wrap(~type)
 ```
 
+Perform statistical analysis of the tumour purity across pairs of subtypes to see if the diffferences between the means and the medians of each pair of subtypes is significant as well as to check the correlation of each for CPE and IHC:
+```{r}
+stattest<-function(x, y){
+  t <- t.test(x, y, alternative = "two.sided", var.equal=F, paired=F)
+  w <- wilcox.test(x, y)
+  c <- cor.test(x, y)
+  output = list("tResults" = t, "wResults" = w, "cResults" = c)
+  
+  return(output)
+}
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$CPE)#not sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$CPE)#notsig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$CPE)#notsig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$CPE)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$CPE)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$CPE)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$CPE)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$CPE)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$CPE)
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$CPE, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$CPE)
+
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$IHC)#not sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$IHC)#notsig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$IHC)#notsig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$IHC)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$IHC)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$IHC)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$IHC)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Basal"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$IHC)#sig
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Normal"),]$IHC)
+stattest(datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumB"),]$IHC, datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.Her2"),]$IHC)
+```
+
+Violin plot of the tumour purity across subtypes:
+```{r}
+library("ggpubr")
+violin<- ggplot(datasubtypes_my1, aes(y = subtype, x = CPE,
+          color = subtype)) +  geom_violin() +
+  theme_minimal() +
+  scale_color_manual(values=darken(cols, 0.3),
+    guide = "none") +
+  xlab("Tumour Purity (CPE)") +ylab(" ")+
+  geom_boxplot(width=0.1)+
+  theme(legend.position = "none",
+        panel.grid.major.x = element_line(colour="grey", size=0.4),
+        panel.grid.minor.y = element_blank(),
+        #panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.title = element_blank())
+ggsave("violin.png")
+```
+
+plot density plots on top of each other:
+```{r}
+dens_datasubtypes_my<- group_by(datasubtypes_my1, subtype) %>% do(ggplot2:::compute_density(na.omit(.$CPE), NULL)) %>%
+  dplyr::rename(CPE = x)
+dens_datasubtypes_my$subtype <- as.factor(dens_datasubtypes_my$subtype)
+
+# get the maximum values
+datasubtypes_my_max <- dplyr::filter(dens_datasubtypes_my, density == max(density)) %>%
+  ungroup() %>% mutate(hjust = c(3.0, 1.5, 0.0, -2.0, -4.0),  vjust = c(-1.5, -3.0, 1.0, -1.5, 3.0))
+datasubtypes_my_max$names <-  datasubtypes_my_max$subtype
+library(RColorBrewer)
+brewer.pal<- brewer.pal(n=8, name = 'Set1')
+cols<- brewer.pal[c(1,2,3,4,5)]
+
+ggplot(datasubtypes_my1) + 
+  geom_density(aes(x = CPE, color = subtype, fill=subtype), alpha=0.2) +
+  xlab("Tumour Purity (CPE)") +
+  ylab("Density")+
+  
+  scale_color_manual(values=darken(cols, 0.3),
+    guide = "none") +
+  
+  scale_fill_manual(values=cols,
+    guide = "none") +
+  theme_minimal() +
+  
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.title = element_blank())+facet_wrap(~subtype)
 
 
 
+ggplot(datasubtypes_my1) + 
+  geom_density(aes(x = CPE, color = subtype, fill=subtype), alpha=0.2) +
+  xlab("Tumour Purity (CPE)") +
+  ylab("Density")+
+  geom_text_repel(data = datasubtypes_my_max,aes(  label = names, hjust = hjust, vjust = vjust, color = subtype, x = CPE, y = density),
+    inherit.aes = FALSE,
+    size = 10/.pt, min.segment.length = unit(0.0, 'lines'), segment.size = 0.2
+  ) +
+  
+  scale_color_manual(values=darken(cols, 0.3),
+    guide = "none") +
+  
+  scale_fill_manual(values=cols,
+    guide = "none") +
+  theme_minimal() +
+  
+  theme(panel.grid.minor.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        plot.title = element_blank())
+```
 
 
 
