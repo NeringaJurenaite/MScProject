@@ -106,7 +106,7 @@ import tumour purity data:
 save(Tumor.purity.L, file="~/Documents/project/Tumor.purity.L.Rdata")
 ```
 
-Match up the subtypes:
+Match up the subtype dataframes:
 ```{r}
 rownames(datasubtypes_mytemp) <- datasubtypes_mytemp$patients
 datasubtypes_my <- datasubtypes_mytemp
@@ -142,7 +142,7 @@ save(yCPE, datasubtypes_my, file="~/Documents/project/normalisedALLandDATASUBTYP
 
 ```
 
-load the pairwise median data and filter out the genes for which their median is 0:
+load the pairwise median data (from pairwisemedian.R) and filter out the genes for which their median is 0:
 ```{r}
 load("~/Documents/project/parwisemediandata.Rdata")
 
@@ -177,7 +177,7 @@ keepBasalNormaldata <- medianBasalNormaldata >0
 BasalNormaldata <- BasalNormaldata[keepBasalNormaldata,]
 ```
 
-Construct the model matrices for each pair of subtypes for later linear regression analysis:
+Construct the model matrices for each pair of subtypes for later linear regression analysis and encode the subtypes as dummy variables 0 and 1:
 ```{r}
 model_lumAlumB <-datasubtypes_my[match(c(lumAsub$patients, lumBsub$patients), rownames(datasubtypes_my)),]
 model_lumABasal <-datasubtypes_my[match(c(lumAsub$patients, Basalsub$patients), rownames(datasubtypes_my)),]
@@ -225,7 +225,7 @@ model_HER2Normal$subtypeOP <- ifelse(model_HER2Normal$subtype == "0", "1", 0)
 model_BasalNormal$subtypeOP <- ifelse(model_BasalNormal$subtype == "0", "1", 0)
 ```
 
-Normalisation using DESeq2 median of ratios approach:
+Normalisation using DESeq2 median of ratios approach of each of the subtype pair dataframes:
 ```{r}
 matrix_temp_2_lumAHER2 <- lumAHER2data
 matrix_temp_2_lumABasal <- lumABasaldata
