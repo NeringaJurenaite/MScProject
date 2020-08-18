@@ -1,0 +1,615 @@
+```{r, include = FALSE} 
+library(ggplot2)#7 rows
+library(EDASeq)
+library(TCGAbiolinks)
+library(dplyr)
+library(DT)
+library(dplyr)
+library(SummarizedExperiment)
+library(limma)
+library(edgeR)
+library(jtools) # for summ()
+library(MASS)
+library(splines)
+library(tidyverse)
+library(ggplot2)
+library(interactions)
+library("readxl")
+library(preprocessCore)
+library(sjPlot)
+library(DESeq2)
+library(sjlabelled)
+library(sjmisc)
+library(ggplot2)
+library(NOISeq)
+library(tidyverse)
+library(fgsea)
+library(org.Hs.eg.db)
+library(dplyr)
+library(gage)
+library(fgsea)
+library(ggplot2)
+library(GSVAdata)
+library(org.Hs.eg.db)
+library(GSEABase)
+library("ggsci")
+library("gridExtra")
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+```
+
+```{r }
+
+load("~/Documents/project/normaliseddataCPE.Rdata")
+load("~/Documents/project/modelmatricesCPE.Rdata")
+#load(file="~/Documents/project/normaliseddata.Rdata")
+BasalNormal <- dataBasalNormal
+#load(file="~/Documents/project/modelmatrices.Rdata")
+
+```
+
+
+
+read https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5354413/#!po=38.0000 paper. It is very similar to what we are doing here
+
+the MAIN model:
+```{r}
+XBasalNormal <- model.matrix(~ subtype * CPE, data=as.data.frame(model_BasalNormal))
+fitBasalNormal <- lmFit(as.data.frame(BasalNormal), XBasalNormal)
+
+#contr.matrix <- makeContrasts(SubvsCPE=subtype-CPE, Sub_CPE=subtype:CPE, levels = colnames(XBasalNormal))
+#contr.matrix
+#contrastsfitBasalNormal <- contrasts.fit(fitBasalNormal, contrasts=contr.matrix)
+#contrastsfitBasalNormal <- eBayes(contrastsfitBasalNormal)
+fitBasalNormal <- eBayes(fitBasalNormal)
+TTBasalNormal <- topTable(fitBasalNormal, number = dim(BasalNormal)[1])
+pvalsBasalNormal <- fitBasalNormal$p.value
+fdradjusted_pvalsBasalNormal <- p.adjust(pvalsBasalNormal[,4], method = "fdr")
+fdradjusted_pvalsBasalNormalsig <- fdradjusted_pvalsBasalNormal[which(fdradjusted_pvalsBasalNormal < 0.05)]
+names(fdradjusted_pvalsBasalNormalsig)
+top95BasalNormal <- TTBasalNormal[which(rownames(TTBasalNormal) %in% names(fdradjusted_pvalsBasalNormalsig)),]
+#plotMA(treatedTT4BasalNormal , alpha = 0.05,  main = "WT vs. SNF2  mutants", ylim = c(-4,4))
+#hist(TTBasalNormal$adj.P.Val ,col = "grey", border = "white", xlab = "", main = "frequencies  of p-values")
+plotSA(fitBasalNormal, main="Final model: Mean-variance trend")
+hist(fdradjusted_pvalsBasalNormal)
+treatedTT1BasalNormal <- topTreat(fitBasalNormal, coef=1, number=dim(BasalNormal)[1], lfc=1)
+treatedTT1BasalNormalsig <- treatedTT1BasalNormal[which(treatedTT1BasalNormal$adj.P.Val < 0.05),]
+treatedTT1BasalNormalsig
+treatedTT2BasalNormal <- topTreat(fitBasalNormal, coef=2, number=dim(BasalNormal)[1], lfc=1)
+treatedTT2BasalNormalsig <- treatedTT2BasalNormal[which(treatedTT2BasalNormal$adj.P.Val < 0.05),]
+treatedTT2BasalNormalsig
+treatedTT3BasalNormal <- topTreat(fitBasalNormal, coef=3, number=dim(BasalNormal)[1], lfc=1)
+treatedTT3BasalNormalsig <- treatedTT3BasalNormal[which(treatedTT3BasalNormal$adj.P.Val < 0.05),]
+treatedTT3BasalNormalsig
+treatedTT4BasalNormal <- topTreat(fitBasalNormal, coef=4, number=dim(BasalNormal)[1], lfc=1)
+treatedTT4BasalNormalsig <- treatedTT4BasalNormal[which(treatedTT4BasalNormal$adj.P.Val < 0.05),]
+treatedTT4BasalNormalsig
+#plot(density(treatedTT2BasalNormalsig$logFC))
+#ENSG00000122566
+#ENSG00000122566
+
+save(treatedTT4BasalNormalsig, treatedTT2BasalNormalsig, file="BasalNormaloutputCPE.Rdata")
+```
+
+
+
+
+
+
+```{r}
+plot(treatedTT4BasalNormal$logFC, -log10(treatedTT4BasalNormal$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT4BasalNormalsig$logFC, -log10(treatedTT4BasalNormalsig$adj.P.Val), col="red", pch="*")
+```
+
+plot for 1-tumour purity linear models:
+
+```{r}
+nmodel_BasalNormal <-model_BasalNormal
+nmodel_BasalNormal$CPE <- (1- nmodel_BasalNormal$CPE)
+nXBasalNormal <- model.matrix(~ subtype * CPE, data=as.data.frame(nmodel_BasalNormal))
+nfitBasalNormal <- lmFit(as.data.frame(BasalNormal), nXBasalNormal)
+
+nfitBasalNormal <- eBayes(nfitBasalNormal)
+nTTBasalNormal<- topTable(nfitBasalNormal, number = dim(BasalNormal)[1])
+npvalsBasalNormal <- nfitBasalNormal$p.value
+nfdradjusted_pvalsBasalNormal <- p.adjust(npvalsBasalNormal[,4], method = "fdr")
+nfdradjusted_pvalsBasalNormalsig <- nfdradjusted_pvalsBasalNormal[which(nfdradjusted_pvalsBasalNormal < 0.05)]
+names(nfdradjusted_pvalsBasalNormalsig)
+ntop95BasalNormal <- nTTBasalNormal[which(rownames(nTTBasalNormal) %in% names(nfdradjusted_pvalsBasalNormalsig)),]
+
+ntreatedTT1BasalNormal <- topTreat(nfitBasalNormal, coef=1, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT1BasalNormalsig <- ntreatedTT1BasalNormal[which(ntreatedTT1BasalNormal$adj.P.Val < 0.05),]
+ntreatedTT1BasalNormalsig
+ntreatedTT2BasalNormal <- topTreat(nfitBasalNormal, coef=2, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT2BasalNormalsig <- ntreatedTT2BasalNormal[which(ntreatedTT2BasalNormal$adj.P.Val < 0.05),]
+ntreatedTT2BasalNormalsig
+ntreatedTT3BasalNormal <- topTreat(nfitBasalNormal, coef=3, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT3BasalNormalsig <- ntreatedTT3BasalNormal[which(ntreatedTT3BasalNormal$adj.P.Val < 0.05),]
+ntreatedTT3BasalNormalsig
+ntreatedTT4BasalNormal <- topTreat(nfitBasalNormal, coef=4, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT4BasalNormalsig <- ntreatedTT4BasalNormal[which(ntreatedTT4BasalNormal$adj.P.Val < 0.05),]
+ntreatedTT4BasalNormalsig
+```
+
+single linear model for 1-tumour purity:
+```{r}
+nCPEmodel_BasalNormal <- as.data.frame(model_BasalNormal)
+nCPEmodel_BasalNormal$CPE <- (nCPEmodel_BasalNormal$CPE)
+nthelm2BasalNormal <- lm(BasalNormal[17876,] ~ subtype * CPE, data=nCPEmodel_BasalNormal)
+
+plot_model(nthelm2BasalNormal, type = "pred", terms = c( "CPE","subtype"))
+which(rownames(BasalNormal) == "ENSG00000214688") # this is a gene responsible for ER expression
+```
+
+```{r}
+normalBasalNormal <- treatedTT2BasalNormalsig[which(rownames(treatedTT2BasalNormalsig) %in% rownames(treatedTT4BasalNormalsig)),]
+normalBasalNormal <- normalBasalNormal[which(!rownames(normalBasalNormal) %in% rownames(ntreatedTT2BasalNormalsig)),]
+
+cancerBasalNormal <- ntreatedTT2BasalNormalsig[which(rownames(ntreatedTT2BasalNormalsig) %in% rownames(ntreatedTT4BasalNormalsig)),]
+cancerBasalNormal <- cancerBasalNormal[which(!rownames(cancerBasalNormal) %in% rownames(treatedTT2BasalNormalsig)),]
+cancerBasalNormal
+normalBasalNormal 
+
+
+save(cancerBasalNormal, normalBasalNormal, file="BasalNormal_C_N_CPE.Rdata")
+```
+
+```{r}
+
+mypal = pal_d3("category10", alpha = 0.7)(9)
+cb3 <-mypal[c(1,4,3)]
+treatedTT4BasalNormalsig$status <- ifelse(rownames(treatedTT4BasalNormalsig) %in% rownames(cancerBasalNormal), "Within Cancer Cells", ifelse(rownames(treatedTT4BasalNormalsig) %in% rownames(normalBasalNormal), "Within Normal Cells", "Both"))
+treatedTT4BasalNormalsig$colour <- ifelse(rownames(treatedTT4BasalNormalsig) %in% rownames(cancerBasalNormal), cb3[2], ifelse(rownames(treatedTT4BasalNormalsig) %in% rownames(normalBasalNormal), cb3[3], cb3[1]))
+genesBasalNormal <- ensembldb::select(EnsDb.Hsapiens.v86, keys= rownames(treatedTT4BasalNormalsig), keytype =   "GENEID", columns = c(  "GENEID", "SYMBOL", "ENTREZID"))
+genesBasalNormal <- genesBasalNormal[!duplicated(genesBasalNormal$GENEID),]
+genesBasalNormal$logFC <- treatedTT4BasalNormalsig[which(rownames(treatedTT4BasalNormalsig) %in% genesBasalNormal$GENEID),][genesBasalNormal$GENEID,]$logFC
+genesBasalNormal$status <- treatedTT4BasalNormalsig[which(rownames(treatedTT4BasalNormalsig) %in% genesBasalNormal$GENEID),][genesBasalNormal$GENEID,]$status
+BasalNormalsigs <- ggplot(genesBasalNormal, (aes(x = reorder(SYMBOL, -logFC), y = logFC, fill=status))) + 
+  geom_col(width=0.7) +
+   ggtitle("Basal-like vs Normal-like Significantly Differentially Expressed Genes") +
+  scale_y_continuous(name = "Log Fold Change") +
+  scale_fill_manual(values=cb3)+theme_bw()+
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+            plot.title = element_text(size = 11.5, face="bold"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      #axis.text.x = element_text(size = 6, angle = 60, vjust = 1, hjust = 1),
+      axis.title.x = element_blank(),
+      plot.margin = margin(6, 6, 3, 3),
+      panel.background=element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.2, linetype = 'solid',colour = "white"),
+      panel.ontop = TRUE, 
+      legend.position= c(0.6, 0.92), legend.direction="horizontal",
+      legend.text = element_text(size = 6), # legend text  was a little large
+      legend.key.size = unit(0.6, "lines"),
+      legend.title = element_blank())# legend keys were a little large
+
+ggsave("BasalNormalsigsCPE.png")
+
+
+
+mypal = pal_d3("category10", alpha = 0.7)(9)
+cb2 <-mypal[c(4,3)]
+cancernormalonlyBasalNormal <-genesBasalNormal[which(genesBasalNormal$status != "Both"),]
+cancernormalonlyBasalNormalgraph <- ggplot(cancernormalonlyBasalNormal, (aes(x = reorder(SYMBOL, -logFC), y = logFC, fill=status))) + 
+  geom_col(width=0.7) +
+   ggtitle("Basal-like vs Normal-like Significantly Differentially Expressed Genes") +
+  scale_y_continuous(name = "Log Fold Change") +
+  scale_fill_manual(values=cb2)+theme_bw()+
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+            plot.title = element_text(size = 11.5, face="bold"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      #axis.text.x = element_text(size = 6, angle = 60, vjust = 1, hjust = 1),
+      axis.title.x = element_blank(),
+      plot.margin = margin(6, 6, 3, 3),
+      panel.background=element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.2, linetype = 'solid',colour = "white"),
+      panel.ontop = TRUE, 
+      legend.position= c(0.6, 0.92), legend.direction="horizontal",
+      legend.text = element_text(size = 6), # legend text  was a little large
+      legend.key.size = unit(0.6, "lines"),
+      legend.title = element_blank())# legend keys were a little large
+
+ggsave("cancernormalonlyBasalNormalCPE.png")
+```
+
+Simple linear model NO interaciton:
+
+the MAIN model:
+```{r}
+XBasalNormals <- model.matrix(~ subtype + CPE, data=as.data.frame(model_BasalNormal))
+fitBasalNormals <- lmFit(as.data.frame(BasalNormal), XBasalNormals)
+fitBasalNormals <- eBayes(fitBasalNormals)
+TTBasalNormals <- topTable(fitBasalNormals, number = dim(BasalNormal)[1])
+pvalsBasalNormals <- fitBasalNormals$p.value
+fdradjusted_pvalsBasalNormalINTERs <- p.adjust(pvalsBasalNormals[,1], method = "fdr")
+fdradjusted_pvalsBasalNormalsigINTERs <- fdradjusted_pvalsBasalNormalINTERs[which(fdradjusted_pvalsBasalNormalINTERs < 0.05)]
+length(names(fdradjusted_pvalsBasalNormalsigINTERs))
+fdradjusted_pvalsBasalNormalSUBs <- p.adjust(pvalsBasalNormals[,2], method = "fdr")
+fdradjusted_pvalsBasalNormalsigSUBs <- fdradjusted_pvalsBasalNormalSUBs[which(fdradjusted_pvalsBasalNormalSUBs < 0.05)]
+length(names(fdradjusted_pvalsBasalNormalsigSUBs))
+fdradjusted_pvalsBasalNormalCPEs <- p.adjust(pvalsBasalNormals[,3], method = "fdr")
+fdradjusted_pvalsBasalNormalsigCPEs <- fdradjusted_pvalsBasalNormalCPEs[which(fdradjusted_pvalsBasalNormalCPEs < 0.05)]
+length(names(fdradjusted_pvalsBasalNormalsigCPEs))
+plotSA(fitBasalNormals, main="Final model: Mean-variance trend")
+hist(fdradjusted_pvalsBasalNormalSUBs)
+
+treatedTT1BasalNormals <- topTreat(fitBasalNormals, coef=1, number=dim(BasalNormal)[1], lfc=1)
+treatedTT1BasalNormalsigs <- treatedTT1BasalNormals[which(treatedTT1BasalNormals$adj.P.Val < 0.05),]
+treatedTT1BasalNormalsigs
+treatedTT2BasalNormals <- topTreat(fitBasalNormals, coef=2, number=dim(BasalNormal)[1], lfc=1)
+treatedTT2BasalNormalsigs <- treatedTT2BasalNormals[which(treatedTT2BasalNormals$adj.P.Val < 0.05),]
+treatedTT2BasalNormalsigs
+treatedTT3BasalNormals <- topTreat(fitBasalNormals, coef=3, number=dim(BasalNormal)[1], lfc=1)
+treatedTT3BasalNormalsigs <- treatedTT3BasalNormals[which(treatedTT3BasalNormals$adj.P.Val < 0.05),]
+treatedTT3BasalNormalsigs
+
+
+treatedTT2BasalNormalsigs[which(rownames(treatedTT2BasalNormalsigs) %in% rownames(treatedTT4BasalNormalsig)),]
+treatedTT2BasalNormalsigs[which(rownames(treatedTT2BasalNormalsigs) %in% rownames(cancerBasalNormal)),]
+treatedTT2BasalNormalsigs[which(rownames(treatedTT2BasalNormalsigs) %in% rownames(normalBasalNormal)),]
+```
+
+```{r}
+plot(treatedTT4BasalNormal$logFC, -log10(treatedTT4BasalNormal$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT4BasalNormalsig$logFC, -log10(treatedTT4BasalNormalsig$adj.P.Val), col="red", pch="*")
+```
+
+plot for 1-tumour purity linear models:
+
+```{r}
+nmodel_BasalNormals <- model_BasalNormal
+nmodel_BasalNormals$CPE <- (1- nmodel_BasalNormals$CPE)
+nXBasalNormals <- model.matrix(~ subtype + CPE, data=as.data.frame(nmodel_BasalNormals))
+nfitBasalNormals <- lmFit(as.data.frame(BasalNormal), nXBasalNormals)
+nfitBasalNormals <- eBayes(nfitBasalNormals)
+nTTBasalNormals<- topTable(nfitBasalNormals, number = dim(BasalNormal)[1])
+npvalsBasalNormals <- nfitBasalNormals$p.value
+ntreatedTT1BasalNormals <- topTreat(nfitBasalNormals, coef=1, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT1BasalNormalsigs <- ntreatedTT1BasalNormals[which(ntreatedTT1BasalNormals$adj.P.Val < 0.05),]
+ntreatedTT1BasalNormalsigs
+ntreatedTT2BasalNormals <- topTreat(nfitBasalNormals, coef=2, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT2BasalNormalsigs <- ntreatedTT2BasalNormals[which(ntreatedTT2BasalNormals$adj.P.Val < 0.05),]
+ntreatedTT2BasalNormalsigs
+#ntreatedTT2BasalNormalsigs[which(rownames(ntreatedTT2BasalNormalsigs) %in% rownames(normalBasalNormal)),]
+ntreatedTT3BasalNormals <- topTreat(nfitBasalNormals, coef=3, number=dim(BasalNormal)[1], lfc=1)
+ntreatedTT3BasalNormalsigs <- ntreatedTT3BasalNormals[which(ntreatedTT3BasalNormals$adj.P.Val < 0.05),]
+ntreatedTT3BasalNormalsigs
+```
+
+
+
+
+single linear model for 1-tumour purity:
+```{r}
+nCPEmodel_BasalNormals <- as.data.frame(nmodel_BasalNormals)
+nCPEmodel_BasalNormals$CPE <- (1- nCPEmodel_BasalNormals$CPE)
+nthelm2BasalNormals <- lm(BasalNormal[5015,] ~ subtype + CPE, data=nCPEmodel_BasalNormals)
+
+plot_model(nthelm2BasalNormals, type = "pred", terms = c( "CPE","subtype"))
+which(rownames(BasalNormal) == "ENSG00000122566")
+```
+
+plot adj p values:
+```{r}
+qqnorm(ntreatedTT2BasalNormals$adj.P.Val, pch = 1, frame = FALSE)
+qqline(ntreatedTT2BasalNormals$adj.P.Val, col = "steelblue", lwd = 2)
+```
+
+
+merged linear plot for top10:
+```{r}
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+library(xtable)
+Subtype_names <- c("Basal-like", "Normal-like")
+CPEmodel_BasalNormal <- as.data.frame(model_BasalNormal)
+genes <- ensembldb::select(EnsDb.Hsapiens.v86, keys= rownames(treatedTT1BasalNormalsig), keytype =   "GENEID", columns = c(  "GENEID", "SYMBOL", "ENTREZID"))
+genes<- genes[!duplicated(genes$GENEID),]
+
+top10Genes <- genes[which(genes$GENEID %in% c("ENSG00000141510", "ENSG00000121879", "ENSG00000039068", "ENSG00000107485", "ENSG00000055609", "ENSG00000095015","ENSG00000171862", "ENSG00000141027" , "ENSG00000159216", "ENSG00000117713")),]
+top10Genes <- top10Genes[order(top10Genes$GENEID),]
+top10GenesBasalNormal <- BasalNormal[which(rownames(BasalNormal) %in% c("ENSG00000141510", "ENSG00000121879", "ENSG00000039068", "ENSG00000107485", "ENSG00000055609", "ENSG00000095015","ENSG00000171862", "ENSG00000141027" , "ENSG00000159216", "ENSG00000117713")),]
+#top10GenesBasalNormal[top10Genes$GENEID,]
+top10GenesBasalNormal <- top10GenesBasalNormal[order(rownames(top10GenesBasalNormal)),]
+dim(top10GenesBasalNormal)
+all.equal(rownames(top10GenesBasalNormal), top10Genes$GENEID)
+rownames(top10GenesBasalNormal) <- top10Genes$SYMBOL
+top10lmBasalNormal <-  numeric(length = nrow(top10GenesBasalNormal))
+plotBasalNormalCPE1 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[1,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[1])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(color = "red",face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank(),legend.position = c(0.05, 0.05),
+    legend.justification = c("left", "bottom"),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE1, file=paste0("~/Documents/project/plots/BasalNormalCPE_111.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotBasalNormalCPE2 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[2,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[2])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE2, file=paste0("~/Documents/project/plots/BasalNormalCPE_211.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotBasalNormalCPE3 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[3,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[3])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE3, file=paste0("~/Documents/project/plots/BasalNormalCPE_311.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotBasalNormalCPE4 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[4,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[4])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE4, file=paste0("~/Documents/project/plots/BasalNormalCPE_411.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotBasalNormalCPE5 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[5,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[5])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE5, file=paste0("~/Documents/project/plots/BasalNormalCPE_511.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotBasalNormalCPE6 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[6,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[6])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE6, file=paste0("~/Documents/project/plots/BasalNormalCPE_611.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotBasalNormalCPE7 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[7,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[7])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE7, file=paste0("~/Documents/project/plots/BasalNormalCPE_711.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotBasalNormalCPE8 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[8,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[8])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE8, file=paste0("~/Documents/project/plots/BasalNormalCPE_811.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotBasalNormalCPE9 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[9,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GenesBasalNormal)[9])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE9, file=paste0("~/Documents/project/plots/BasalNormalCPE_911.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotBasalNormalCPE10 <- ggplot(CPEmodel_BasalNormal ,aes(y=top10GenesBasalNormal[10,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+     ggtitle(rownames(top10GenesBasalNormal)[10])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotBasalNormalCPE10, file=paste0("~/Documents/project/plots/BasalNormalCPE_1011.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+mergedCPEBasalNormal <-cowplot::plot_grid(plotBasalNormalCPE1, plotBasalNormalCPE2 + theme(legend.position="none"), plotBasalNormalCPE3 + theme(legend.position="none"),plotBasalNormalCPE4 + theme(legend.position="none"), plotBasalNormalCPE5 + theme(legend.position="none"), plotBasalNormalCPE6 + theme(legend.position="none"),plotBasalNormalCPE7 + theme(legend.position="none"), plotBasalNormalCPE8 + theme(legend.position="none"), plotBasalNormalCPE9 + theme(legend.position="none"),plotBasalNormalCPE10 + theme(legend.position="none"), align = "hv", ncol=5)
+
+ggsave(mergedCPEBasalNormal, file=paste0("~/Documents/project/plots/mergedCPEBasalNormal.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+```
+
+NO tumour purity effect taken into account:
+
+the MAIN model:
+```{r}
+XBasalNormalss <- model.matrix(~ subtype, data=as.data.frame(model_BasalNormal))
+fitBasalNormalss <- lmFit(as.data.frame(BasalNormal), XBasalNormalss)
+
+fitBasalNormalss <- eBayes(fitBasalNormalss)
+TTBasalNormalss <- topTable(fitBasalNormalss, number = dim(BasalNormal)[1])
+pvalsBasalNormalss <- fitBasalNormalss$p.value
+fdradjusted_pvalsBasalNormalINTERss <- p.adjust(pvalsBasalNormalss[,1], method = "fdr")
+fdradjusted_pvalsBasalNormalsigINTERss <- fdradjusted_pvalsBasalNormalINTERss[which(fdradjusted_pvalsBasalNormalINTERss < 0.05)]
+length(names(fdradjusted_pvalsBasalNormalsigINTERss))
+plotSA(fitBasalNormalss, main="Final model: Mean-variance trend")
+
+treatedTT1BasalNormalss <- topTreat(fitBasalNormalss, coef=1, number=dim(BasalNormal)[1], lfc=1)
+treatedTT1BasalNormalsigss <- treatedTT1BasalNormalss[which(treatedTT1BasalNormalss$adj.P.Val < 0.05),]
+treatedTT1BasalNormalsigss
+```
+
+```{r}
+plot(treatedTT1BasalNormalss$logFC, -log10(treatedTT1BasalNormalss$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT1BasalNormalsigss$logFC, -log10(treatedTT1BasalNormalsigss$adj.P.Val), col="red", pch="*")
+```
+
+plot QQ plots adj p values:
+```{r}
+#qqnorm(ntreatedTT4BasalNormal$adj.P.Val, pch = 1, frame = FALSE)
+#qqline(ntreatedTT4BasalNormal$adj.P.Val, col = "steelblue", lwd = 2)
+
+#' QQ-plot of the simulated P-values for bulk, cancer model and random CPE model.
+nconvSort4 <- sort(-log10(ntreatedTT4BasalNormal$adj.P.Val), decreasing=T)
+nconvSort3 <- sort(-log10(ntreatedTT3BasalNormal$adj.P.Val), decreasing=T)
+nconvSort2 <- sort(-log10(ntreatedTT2BasalNormal$adj.P.Val), decreasing=T)
+nconvSort1 <- sort(-log10(ntreatedTT1BasalNormal$adj.P.Val), decreasing=T)
+convSort4 <- sort(-log10(treatedTT4BasalNormal$adj.P.Val), decreasing=T)
+convSort3 <- sort(-log10(treatedTT3BasalNormal$adj.P.Val), decreasing=T)
+convSort2 <- sort(-log10(treatedTT2BasalNormal$adj.P.Val), decreasing=T)
+convSort1 <- sort(-log10(treatedTT1BasalNormal$adj.P.Val), decreasing=T)
+
+nconvSort1s <- sort(-log10(ntreatedTT1BasalNormals$adj.P.Val), decreasing=T)
+convSort1s <- sort(-log10(treatedTT1BasalNormals$adj.P.Val), decreasing=T)
+nconvSort2s <- sort(-log10(ntreatedTT2BasalNormals$adj.P.Val), decreasing=T)
+convSort2s <- sort(-log10(treatedTT2BasalNormals$adj.P.Val), decreasing=T)
+nconvSort3s <- sort(-log10(ntreatedTT3BasalNormals$adj.P.Val), decreasing=T)
+convSort3s <- sort(-log10(treatedTT3BasalNormals$adj.P.Val), decreasing=T)
+
+convSort1ss <- sort(-log10(treatedTT1BasalNormalsigss$adj.P.Val), decreasing=T)
+#' Make a QQ plot 
+plot(-log10(1:length(ntreatedTT1BasalNormals$adj.P.Val) / length(ntreatedTT1BasalNormals$adj.P.Val)), nconvSort1s, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l",  pch=17)
+points(-log10(1:length(ntreatedTT2BasalNormals$adj.P.Val) / length(ntreatedTT2BasalNormals$adj.P.Val)), nconvSort2s, col="#ff99c2", pch=17)
+points(-log10(1:length(ntreatedTT3BasalNormals$adj.P.Val) / length(ntreatedTT3BasalNormals$adj.P.Val)), nconvSort3s, col="#cc0052", pch=17)
+points(-log10(1:length(treatedTT1BasalNormalss$adj.P.Val) / length(treatedTT1BasalNormalss$adj.P.Val)), convSort1ss, col="orange", pch=1)
+points(-log10(1:length(ntreatedTT4BasalNormal$adj.P.Val) / length(ntreatedTT4BasalNormal$adj.P.Val)), nconvSort4, col="#ccd9ff")
+points(-log10(1:length(ntreatedTT2BasalNormal$adj.P.Val) / length(ntreatedTT2BasalNormal$adj.P.Val)), nconvSort2, col="#668cff")
+points(-log10(1:length(ntreatedTT3BasalNormal$adj.P.Val) / length(ntreatedTT3BasalNormal$adj.P.Val)), nconvSort3, col="#0033cc")
+points(-log10(1:length(ntreatedTT1BasalNormal$adj.P.Val) / length(ntreatedTT1BasalNormal$adj.P.Val)), nconvSort1, col="#002699")
+abline(0,1, col="red")
+
+plot(-log10(1:length(ntreatedTT1BasalNormal$adj.P.Val) / length(ntreatedTT1BasalNormal$adj.P.Val)), nconvSort1, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT4BasalNormal$adj.P.Val) / length(ntreatedTT4BasalNormal$adj.P.Val)), nconvSort4, col="#ff4d94")
+points(-log10(1:length(ntreatedTT2BasalNormal$adj.P.Val) / length(ntreatedTT2BasalNormal$adj.P.Val)), nconvSort2, col="#ff99c2")
+points(-log10(1:length(ntreatedTT3BasalNormal$adj.P.Val) / length(ntreatedTT3BasalNormal$adj.P.Val)), nconvSort3, col="#cc0052")
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT1BasalNormal$adj.P.Val) / length(treatedTT1BasalNormal$adj.P.Val)), convSort1, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(treatedTT3BasalNormal$adj.P.Val) / length(treatedTT3BasalNormal$adj.P.Val)), convSort3, col="#ff4d94")
+points(-log10(1:length(treatedTT4BasalNormal$adj.P.Val) / length(treatedTT4BasalNormal$adj.P.Val)), convSort4, col="#ff99c2")
+points(-log10(1:length(treatedTT2BasalNormal$adj.P.Val) / length(treatedTT2BasalNormal$adj.P.Val)), convSort2, col="#cc0052")
+abline(0,1, col="red")
+
+
+plot(-log10(1:length(treatedTT2BasalNormal$adj.P.Val) / length(treatedTT2BasalNormal$adj.P.Val)), convSort2, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="orange", bty="l")
+points(-log10(1:length(ntreatedTT2BasalNormal$adj.P.Val) / length(ntreatedTT2BasalNormal$adj.P.Val)), nconvSort2, col="#809fff")
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT3BasalNormal$adj.P.Val) / length(treatedTT3BasalNormal$adj.P.Val)), convSort3, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT3BasalNormal$adj.P.Val) / length(ntreatedTT3BasalNormal$adj.P.Val)), nconvSort3, col="#0040ff", pch=4)
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT4BasalNormal$adj.P.Val) / length(treatedTT4BasalNormal$adj.P.Val)), convSort4, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT4BasalNormal$adj.P.Val) / length(ntreatedTT4BasalNormal$adj.P.Val)), nconvSort4, col="#0040ff", pch=4)
+abline(0,1, col="red")
+```
+
+
