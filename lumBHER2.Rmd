@@ -1,0 +1,614 @@
+
+
+```{r }
+
+load(file="~/Documents/project/normaliseddataCPE.Rdata")
+load(file="~/Documents/project/modelmatricesCPE.Rdata")
+#load(file="~/Documents/project/normaliseddata.Rdata")
+lumBHER2 <- datalumBHER2
+#load(file="~/Documents/project/modelmatrices.Rdata")
+```
+
+
+```{r, include = FALSE} 
+library(ggplot2)#7 rows
+library(EDASeq)
+library(TCGAbiolinks)
+library(dplyr)
+library(DT)
+library(dplyr)
+library(SummarizedExperiment)
+library(limma)
+library(edgeR)
+library(jtools) # for summ()
+library(MASS)
+library(splines)
+library(tidyverse)
+library(ggplot2)
+library(interactions)
+library("readxl")
+library(preprocessCore)
+library(sjPlot)
+library(DESeq2)
+library(sjlabelled)
+library(sjmisc)
+library(ggplot2)
+library(NOISeq)
+library(tidyverse)
+library(fgsea)
+library(org.Hs.eg.db)
+library(dplyr)
+library(gage)
+library(fgsea)
+library(ggplot2)
+library(GSVAdata)
+library(org.Hs.eg.db)
+library(GSEABase)
+library("ggsci")
+library("gridExtra")
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+```
+
+
+
+read https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5354413/#!po=38.0000 paper. It is very similar to what we are doing here
+
+the MAIN model:
+```{r}
+XlumBHER2 <- model.matrix(~ subtype * CPE, data=as.data.frame(model_lumBHER2))
+fitlumBHER2 <- lmFit(as.data.frame(lumBHER2), XlumBHER2)
+
+#contr.matrix <- makeContrasts(SubvsCPE=subtype-CPE, Sub_CPE=subtype:CPE, levels = colnames(XlumBHER2))
+#contr.matrix
+#contrastsfitlumBHER2 <- contrasts.fit(fitlumBHER2, contrasts=contr.matrix)
+#contrastsfitlumBHER2 <- eBayes(contrastsfitlumBHER2)
+fitlumBHER2 <- eBayes(fitlumBHER2)
+TTlumBHER2 <- topTable(fitlumBHER2, number = dim(lumBHER2)[1])
+pvalslumBHER2 <- fitlumBHER2$p.value
+fdradjusted_pvalslumBHER2 <- p.adjust(pvalslumBHER2[,4], method = "fdr")
+fdradjusted_pvalslumBHER2sig <- fdradjusted_pvalslumBHER2[which(fdradjusted_pvalslumBHER2 < 0.05)]
+names(fdradjusted_pvalslumBHER2sig)
+top95lumBHER2 <- TTlumBHER2[which(rownames(TTlumBHER2) %in% names(fdradjusted_pvalslumBHER2sig)),]
+#plotMA(treatedTT4lumBHER2 , alpha = 0.05,  main = "WT vs. SNF2  mutants", ylim = c(-4,4))
+#hist(TTlumBHER2$adj.P.Val ,col = "grey", border = "white", xlab = "", main = "frequencies  of p-values")
+plotSA(fitlumBHER2, main="Final model: Mean-variance trend")
+hist(fdradjusted_pvalslumBHER2)
+treatedTT1lumBHER2 <- topTreat(fitlumBHER2, coef=1, number=dim(lumBHER2)[1], lfc=1)
+treatedTT1lumBHER2sig <- treatedTT1lumBHER2[which(treatedTT1lumBHER2$adj.P.Val < 0.05),]
+treatedTT1lumBHER2sig
+treatedTT2lumBHER2 <- topTreat(fitlumBHER2, coef=2, number=dim(lumBHER2)[1], lfc=1)
+treatedTT2lumBHER2sig <- treatedTT2lumBHER2[which(treatedTT2lumBHER2$adj.P.Val < 0.05),]
+treatedTT2lumBHER2sig
+treatedTT3lumBHER2 <- topTreat(fitlumBHER2, coef=3, number=dim(lumBHER2)[1], lfc=1)
+treatedTT3lumBHER2sig <- treatedTT3lumBHER2[which(treatedTT3lumBHER2$adj.P.Val < 0.05),]
+treatedTT3lumBHER2sig
+treatedTT4lumBHER2 <- topTreat(fitlumBHER2, coef=4, number=dim(lumBHER2)[1], lfc=1)
+treatedTT4lumBHER2sig <- treatedTT4lumBHER2[which(treatedTT4lumBHER2$adj.P.Val < 0.05),]
+treatedTT4lumBHER2sig
+#plot(density(treatedTT2lumBHER2sig$logFC))
+#ENSG00000122566
+#ENSG00000122566
+
+```
+
+
+
+
+
+
+```{r}
+plot(treatedTT4lumBHER2$logFC, -log10(treatedTT4lumBHER2$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT4lumBHER2sig$logFC, -log10(treatedTT4lumBHER2sig$adj.P.Val), col="red", pch="*")
+```
+
+plot for 1-tumour purity linear models:
+
+```{r}
+nmodel_lumBHER2 <-model_lumBHER2
+nmodel_lumBHER2$CPE <- (1- nmodel_lumBHER2$CPE)
+nXlumBHER2 <- model.matrix(~ subtype * CPE, data=as.data.frame(nmodel_lumBHER2))
+nfitlumBHER2 <- lmFit(as.data.frame(lumBHER2), nXlumBHER2)
+
+nfitlumBHER2 <- eBayes(nfitlumBHER2)
+nTTlumBHER2<- topTable(nfitlumBHER2, number = dim(lumBHER2)[1])
+npvalslumBHER2 <- nfitlumBHER2$p.value
+nfdradjusted_pvalslumBHER2 <- p.adjust(npvalslumBHER2[,4], method = "fdr")
+nfdradjusted_pvalslumBHER2sig <- nfdradjusted_pvalslumBHER2[which(nfdradjusted_pvalslumBHER2 < 0.05)]
+names(nfdradjusted_pvalslumBHER2sig)
+ntop95lumBHER2 <- nTTlumBHER2[which(rownames(nTTlumBHER2) %in% names(nfdradjusted_pvalslumBHER2sig)),]
+
+ntreatedTT1lumBHER2 <- topTreat(nfitlumBHER2, coef=1, number=dim(lumBHER2)[1], lfc=1)
+ntreatedTT1lumBHER2sig <- ntreatedTT1lumBHER2[which(ntreatedTT1lumBHER2$adj.P.Val < 0.05),]
+ntreatedTT1lumBHER2sig
+ntreatedTT2lumBHER2 <- topTreat(nfitlumBHER2, coef=2, number=dim(lumBHER2)[1], lfc=1)
+ntreatedTT2lumBHER2sig <- ntreatedTT2lumBHER2[which(ntreatedTT2lumBHER2$adj.P.Val < 0.05),]
+ntreatedTT2lumBHER2sig
+ntreatedTT3lumBHER2 <- topTreat(nfitlumBHER2, coef=3, number=dim(lumBHER2)[1], lfc=1)
+ntreatedTT3lumBHER2sig <- ntreatedTT3lumBHER2[which(ntreatedTT3lumBHER2$adj.P.Val < 0.05),]
+ntreatedTT3lumBHER2sig
+ntreatedTT4lumBHER2 <- topTreat(nfitlumBHER2, coef=4, number=dim(lumBHER2)[1], lfc=1)
+ntreatedTT4lumBHER2sig <- ntreatedTT4lumBHER2[which(ntreatedTT4lumBHER2$adj.P.Val < 0.05),]
+ntreatedTT4lumBHER2sig
+```
+
+single linear model for 1-tumour purity:
+```{r}
+nCPEmodel_lumBHER2 <- as.data.frame(model_lumBHER2)
+nCPEmodel_lumBHER2$CPE <- (nCPEmodel_lumBHER2$CPE)
+nthelm2lumBHER2 <- lm(lumBHER2[17876,] ~ subtype * CPE, data=nCPEmodel_lumBHER2)
+
+plot_model(nthelm2lumBHER2, type = "pred", terms = c( "CPE","subtype"))
+which(rownames(lumBHER2) == "ENSG00000214688") # this is a gene responsible for ER expression
+```
+
+```{r}
+normallumBHER2 <- treatedTT2lumBHER2sig[which(rownames(treatedTT2lumBHER2sig) %in% rownames(treatedTT4lumBHER2sig)),]
+normallumBHER2 <- normallumBHER2[which(!rownames(normallumBHER2) %in% rownames(ntreatedTT2lumBHER2sig)),]
+
+cancerlumBHER2 <- ntreatedTT2lumBHER2sig[which(rownames(ntreatedTT2lumBHER2sig) %in% rownames(ntreatedTT4lumBHER2sig)),]
+cancerlumBHER2 <- cancerlumBHER2[which(!rownames(cancerlumBHER2) %in% rownames(treatedTT2lumBHER2sig)),]
+cancerlumBHER2
+normallumBHER2 
+
+
+save(normallumBHER2, cancerlumBHER2, file="lumBHER2_C_N_CPE.Rdata")
+```
+
+```{r}
+
+mypal = pal_d3("category10", alpha = 0.7)(9)
+cb3 <-mypal[c(1,4,3)]
+treatedTT4lumBHER2sig$status <- ifelse(rownames(treatedTT4lumBHER2sig) %in% rownames(cancerlumBHER2), "Within Cancer Cells", ifelse(rownames(treatedTT4lumBHER2sig) %in% rownames(normallumBHER2), "Within Normal Cells", "Both"))
+treatedTT4lumBHER2sig$colour <- ifelse(rownames(treatedTT4lumBHER2sig) %in% rownames(cancerlumBHER2), cb3[2], ifelse(rownames(treatedTT4lumBHER2sig) %in% rownames(normallumBHER2), cb3[3], cb3[1]))
+geneslumBHER2 <- ensembldb::select(EnsDb.Hsapiens.v86, keys= rownames(treatedTT4lumBHER2sig), keytype =   "GENEID", columns = c(  "GENEID", "SYMBOL", "ENTREZID"))
+geneslumBHER2 <- geneslumBHER2[!duplicated(geneslumBHER2$GENEID),]
+geneslumBHER2$logFC <- treatedTT4lumBHER2sig[which(rownames(treatedTT4lumBHER2sig) %in% geneslumBHER2$GENEID),][geneslumBHER2$GENEID,]$logFC
+geneslumBHER2$status <- treatedTT4lumBHER2sig[which(rownames(treatedTT4lumBHER2sig) %in% geneslumBHER2$GENEID),][geneslumBHER2$GENEID,]$status
+lumBHER2sigs <- ggplot(geneslumBHER2, (aes(x = reorder(SYMBOL, -logFC), y = logFC, fill=status))) + 
+  geom_col(width=0.7) +
+   ggtitle("Luminal B vs Luminal HER2-enriched Significantly Differentially Expressed Genes") +
+  scale_y_continuous(name = "Log Fold Change") +
+  scale_fill_manual(values=cb3)+theme_bw()+
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+            plot.title = element_text(size = 11.5, face="bold"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      #axis.text.x = element_text(size = 6, angle = 60, vjust = 1, hjust = 1),
+      axis.title.x = element_blank(),
+      plot.margin = margin(6, 6, 3, 3),
+      panel.background=element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.2, linetype = 'solid',colour = "white"),
+      panel.ontop = TRUE, 
+      legend.position= c(0.6, 0.92), legend.direction="horizontal",
+      legend.text = element_text(size = 6), # legend text  was a little large
+      legend.key.size = unit(0.6, "lines"),
+      legend.title = element_blank())# legend keys were a little large
+
+ggsave("lumBHER2sigsCPE.png")
+
+
+
+mypal = pal_d3("category10", alpha = 0.7)(9)
+cb2 <-mypal[c(4,3)]
+cancernormalonlylumBHER2 <-geneslumBHER2[which(geneslumBHER2$status != "Both"),]
+cancernormalonlylumBHER2graph <- ggplot(cancernormalonlylumBHER2, (aes(x = reorder(SYMBOL, -logFC), y = logFC, fill=status))) + 
+  geom_col(width=0.7) +
+   ggtitle("Luminal B vs Luminal HER2-enriched Significantly Differentially Expressed Genes") +
+  scale_y_continuous(name = "Log Fold Change") +
+  scale_fill_manual(values=cb2)+theme_bw()+
+    theme(
+      axis.line.y = element_blank(),
+      axis.ticks.y = element_blank(),
+            plot.title = element_text(size = 11.5, face="bold"),
+      axis.ticks.x = element_blank(),
+      axis.text.x = element_blank(),
+      #axis.text.x = element_text(size = 6, angle = 60, vjust = 1, hjust = 1),
+      axis.title.x = element_blank(),
+      plot.margin = margin(6, 6, 3, 3),
+      panel.background=element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.grid.major.y = element_line(size = 0.2, linetype = 'solid',colour = "white"),
+      panel.ontop = TRUE, 
+      legend.position= c(0.6, 0.92), legend.direction="horizontal",
+      legend.text = element_text(size = 6), # legend text  was a little large
+      legend.key.size = unit(0.6, "lines"),
+      legend.title = element_blank())# legend keys were a little large
+
+ggsave("cancernormalonlylumBHER2_CPE.png")
+```
+
+Simple linear model NO interaciton:
+
+the MAIN model:
+```{r}
+XlumBHER2s <- model.matrix(~ subtype + CPE, data=as.data.frame(model_lumBHER2))
+fitlumBHER2s <- lmFit(as.data.frame(lumBHER2), XlumBHER2s)
+fitlumBHER2s <- eBayes(fitlumBHER2s)
+TTlumBHER2s <- topTable(fitlumBHER2s, number = dim(lumBHER2)[1])
+pvalslumBHER2s <- fitlumBHER2s$p.value
+fdradjusted_pvalslumBHER2INTERs <- p.adjust(pvalslumBHER2s[,1], method = "fdr")
+fdradjusted_pvalslumBHER2sigINTERs <- fdradjusted_pvalslumBHER2INTERs[which(fdradjusted_pvalslumBHER2INTERs < 0.05)]
+length(names(fdradjusted_pvalslumBHER2sigINTERs))
+fdradjusted_pvalslumBHER2SUBs <- p.adjust(pvalslumBHER2s[,2], method = "fdr")
+fdradjusted_pvalslumBHER2sigSUBs <- fdradjusted_pvalslumBHER2SUBs[which(fdradjusted_pvalslumBHER2SUBs < 0.05)]
+length(names(fdradjusted_pvalslumBHER2sigSUBs))
+fdradjusted_pvalslumBHER2CPEs <- p.adjust(pvalslumBHER2s[,3], method = "fdr")
+fdradjusted_pvalslumBHER2sigCPEs <- fdradjusted_pvalslumBHER2CPEs[which(fdradjusted_pvalslumBHER2CPEs < 0.05)]
+length(names(fdradjusted_pvalslumBHER2sigCPEs))
+plotSA(fitlumBHER2s, main="Final model: Mean-variance trend")
+hist(fdradjusted_pvalslumBHER2SUBs)
+
+treatedTT1lumBHER2s <- topTreat(fitlumBHER2s, coef=1, number=dim(lumBHER2)[1])
+treatedTT1lumBHER2sigs <- treatedTT1lumBHER2s[which(treatedTT1lumBHER2s$adj.P.Val < 0.05),]
+treatedTT1lumBHER2sigs
+treatedTT2lumBHER2s <- topTreat(fitlumBHER2s, coef=2, number=dim(lumBHER2)[1])
+treatedTT2lumBHER2sigs <- treatedTT2lumBHER2s[which(treatedTT2lumBHER2s$adj.P.Val < 0.05),]
+treatedTT2lumBHER2sigs
+treatedTT3lumBHER2s <- topTreat(fitlumBHER2s, coef=3, number=dim(lumBHER2)[1])
+treatedTT3lumBHER2sigs <- treatedTT3lumBHER2s[which(treatedTT3lumBHER2s$adj.P.Val < 0.05),]
+treatedTT3lumBHER2sigs
+
+
+treatedTT2lumBHER2sigs[which(rownames(treatedTT2lumBHER2sigs) %in% rownames(treatedTT4lumBHER2sig)),]
+treatedTT2lumBHER2sigs[which(rownames(treatedTT2lumBHER2sigs) %in% rownames(cancerlumBHER2)),]
+treatedTT2lumBHER2sigs[which(rownames(treatedTT2lumBHER2sigs) %in% rownames(normallumBHER2)),]
+```
+
+```{r}
+plot(treatedTT4lumBHER2$logFC, -log10(treatedTT4lumBHER2$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT4lumBHER2sig$logFC, -log10(treatedTT4lumBHER2sig$adj.P.Val), col="red", pch="*")
+```
+
+plot for 1-tumour purity linear models:
+
+```{r}
+nmodel_lumBHER2s <- model_lumBHER2
+nmodel_lumBHER2s$CPE <- (1- nmodel_lumBHER2s$CPE)
+nXlumBHER2s <- model.matrix(~ subtype + CPE, data=as.data.frame(nmodel_lumBHER2s))
+nfitlumBHER2s <- lmFit(as.data.frame(lumBHER2), nXlumBHER2s)
+nfitlumBHER2s <- eBayes(nfitlumBHER2s)
+nTTlumBHER2s<- topTable(nfitlumBHER2s, number = dim(lumBHER2)[1])
+npvalslumBHER2s <- nfitlumBHER2s$p.value
+ntreatedTT1lumBHER2s <- topTreat(nfitlumBHER2s, coef=1, number=dim(lumBHER2)[1])
+ntreatedTT1lumBHER2sigs <- ntreatedTT1lumBHER2s[which(ntreatedTT1lumBHER2s$adj.P.Val < 0.05),]
+ntreatedTT1lumBHER2sigs
+ntreatedTT2lumBHER2s <- topTreat(nfitlumBHER2s, coef=2, number=dim(lumBHER2)[1])
+ntreatedTT2lumBHER2sigs <- ntreatedTT2lumBHER2s[which(ntreatedTT2lumBHER2s$adj.P.Val < 0.05),]
+ntreatedTT2lumBHER2sigs
+#ntreatedTT2lumBHER2sigs[which(rownames(ntreatedTT2lumBHER2sigs) %in% rownames(normallumBHER2)),]
+ntreatedTT3lumBHER2s <- topTreat(nfitlumBHER2s, coef=3, number=dim(lumBHER2)[1])
+ntreatedTT3lumBHER2sigs <- ntreatedTT3lumBHER2s[which(ntreatedTT3lumBHER2s$adj.P.Val < 0.05),]
+ntreatedTT3lumBHER2sigs
+```
+
+
+
+
+single linear model for 1-tumour purity:
+```{r}
+nCPEmodel_lumBHER2s <- as.data.frame(nmodel_lumBHER2s)
+nCPEmodel_lumBHER2s$CPE <- (1- nCPEmodel_lumBHER2s$CPE)
+nthelm2lumBHER2s <- lm(lumBHER2[5015,] ~ subtype + CPE, data=nCPEmodel_lumBHER2s)
+
+plot_model(nthelm2lumBHER2s, type = "pred", terms = c( "CPE","subtype"))
+which(rownames(lumBHER2) == "ENSG00000122566")
+```
+
+plot adj p values:
+```{r}
+qqnorm(ntreatedTT2lumBHER2s$adj.P.Val, pch = 1, frame = FALSE)
+qqline(ntreatedTT2lumBHER2s$adj.P.Val, col = "steelblue", lwd = 2)
+```
+
+
+merged linear plot for top10:
+```{r}
+library(ensembldb)
+library(EnsDb.Hsapiens.v86)
+library(xtable)
+Subtype_names <- c("Luminal B", "HER2-enriched")
+CPEmodel_lumBHER2 <- as.data.frame(model_lumBHER2)
+genes <- ensembldb::select(EnsDb.Hsapiens.v86, keys= rownames(treatedTT1lumBHER2sig), keytype =   "GENEID", columns = c(  "GENEID", "SYMBOL", "ENTREZID"))
+genes<- genes[!duplicated(genes$GENEID),]
+
+top10Genes <- genes[which(genes$GENEID %in% c("ENSG00000141510", "ENSG00000121879", "ENSG00000039068", "ENSG00000107485", "ENSG00000055609", "ENSG00000095015","ENSG00000171862", "ENSG00000141027" , "ENSG00000159216", "ENSG00000117713")),]
+top10Genes <- top10Genes[order(top10Genes$GENEID),]
+top10GeneslumBHER2 <- lumBHER2[which(rownames(lumBHER2) %in% c("ENSG00000141510", "ENSG00000121879", "ENSG00000039068", "ENSG00000107485", "ENSG00000055609", "ENSG00000095015","ENSG00000171862", "ENSG00000141027" , "ENSG00000159216", "ENSG00000117713")),]
+#top10GeneslumBHER2[top10Genes$GENEID,]
+top10GeneslumBHER2 <- top10GeneslumBHER2[order(rownames(top10GeneslumBHER2)),]
+dim(top10GeneslumBHER2)
+all.equal(rownames(top10GeneslumBHER2), top10Genes$GENEID)
+rownames(top10GeneslumBHER2) <- top10Genes$SYMBOL
+top10lmlumBHER2 <-  numeric(length = nrow(top10GeneslumBHER2))
+plotlumBHER2CPE1 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[1,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[1])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(color = "red",face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank(),legend.position = c(0.05, 0.05),
+    legend.justification = c("left", "bottom"),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE1, file=paste0("~/Documents/project/plots/lumBHER2CPE_111.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotlumBHER2CPE2 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[2,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[2])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE2, file=paste0("~/Documents/project/plots/lumBHER2CPE_211.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotlumBHER2CPE3 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[3,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[3])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE3, file=paste0("~/Documents/project/plots/lumBHER2CPE_311.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotlumBHER2CPE4 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[4,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[4])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE4, file=paste0("~/Documents/project/plots/lumBHER2CPE_411.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotlumBHER2CPE5 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[5,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[5])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE5, file=paste0("~/Documents/project/plots/lumBHER2CPE_511.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotlumBHER2CPE6 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[6,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[6])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE6, file=paste0("~/Documents/project/plots/lumBHER2CPE_611.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotlumBHER2CPE7 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[7,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[7])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE7, file=paste0("~/Documents/project/plots/lumBHER2CPE_711.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotlumBHER2CPE8 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[8,],x=CPE,color=factor(subtype),shape=factor(subtype) ))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[8])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE8, file=paste0("~/Documents/project/plots/lumBHER2CPE_811.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+plotlumBHER2CPE9 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[9,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+   
+     ggtitle(rownames(top10GeneslumBHER2)[9])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE9, file=paste0("~/Documents/project/plots/lumBHER2CPE_911.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+plotlumBHER2CPE10 <- ggplot(CPEmodel_lumBHER2 ,aes(y=top10GeneslumBHER2[10,],x=CPE,color=factor(subtype), shape=factor(subtype)))+
+    scale_colour_manual(values = c("green4", "blue"), name = "Subtype", labels=Subtype_names) +
+    scale_shape_manual(values = c(8, 1), name = "Subtype", labels=Subtype_names) +  xlab("Tumour Purity (CPE)") + # new label for x axis
+     ggtitle(rownames(top10GeneslumBHER2)[10])+
+  ylab ("Gene Expression") + theme_classic() +
+  geom_point()+stat_smooth(method="lm",se=FALSE)+  theme (axis.text = element_text(size =10),
+  panel.grid.major.x = element_line(size = 0.25, linetype = 'solid',colour = "lightgrey"), 
+  panel.grid.minor.x = element_line(size = 0.1, linetype = 'solid',colour = "lightgrey"),
+  axis.title = element_text(size =12),
+  legend.title = element_text(face="bold",size=14),
+  axis.text.y = element_blank(),
+  axis.title.y=element_blank(),
+  axis.ticks = element_blank(),
+  legend.text = element_text(face="italic",size=10),
+  plot.title = element_text(face="bold",size=14))
+ggsave(plotlumBHER2CPE10, file=paste0("~/Documents/project/plots/lumBHER2CPE_1011.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+
+
+mergedCPElumBHER2 <-cowplot::plot_grid(plotlumBHER2CPE1, plotlumBHER2CPE2 + theme(legend.position="none"), plotlumBHER2CPE3 + theme(legend.position="none"),plotlumBHER2CPE4 + theme(legend.position="none"), plotlumBHER2CPE5 + theme(legend.position="none"), plotlumBHER2CPE6 + theme(legend.position="none"),plotlumBHER2CPE7 + theme(legend.position="none"), plotlumBHER2CPE8 + theme(legend.position="none"), plotlumBHER2CPE9 + theme(legend.position="none"),plotlumBHER2CPE10 + theme(legend.position="none"), align = "hv", ncol=5)
+
+ggsave(mergedCPElumBHER2, file=paste0("~/Documents/project/plots/mergedCPElumBHER2.png"), width = 44.45, height = 27.78, units = "cm", dpi=300)
+```
+
+NO tumour purity effect taken into account:
+
+the MAIN model:
+```{r}
+XlumBHER2ss <- model.matrix(~ subtype, data=as.data.frame(model_lumBHER2))
+fitlumBHER2ss <- lmFit(as.data.frame(lumBHER2), XlumBHER2ss)
+
+fitlumBHER2ss <- eBayes(fitlumBHER2ss)
+TTlumBHER2ss <- topTable(fitlumBHER2ss, number = dim(lumBHER2)[1])
+pvalslumBHER2ss <- fitlumBHER2ss$p.value
+fdradjusted_pvalslumBHER2INTERss <- p.adjust(pvalslumBHER2ss[,1], method = "fdr")
+fdradjusted_pvalslumBHER2sigINTERss <- fdradjusted_pvalslumBHER2INTERss[which(fdradjusted_pvalslumBHER2INTERss < 0.05)]
+length(names(fdradjusted_pvalslumBHER2sigINTERss))
+plotSA(fitlumBHER2ss, main="Final model: Mean-variance trend")
+
+treatedTT1lumBHER2ss <- topTreat(fitlumBHER2ss, coef=1, number=dim(lumBHER2)[1], lfc=1)
+treatedTT1lumBHER2sigss <- treatedTT1lumBHER2ss[which(treatedTT1lumBHER2ss$adj.P.Val < 0.05),]
+treatedTT1lumBHER2sigss
+```
+
+```{r}
+plot(treatedTT1lumBHER2ss$logFC, -log10(treatedTT1lumBHER2ss$adj.P.Val), pch="*", xlab="Log2 Fold Change", ylab="-10log (adjusted p-value)") 
+#first plot -10*log of adjusted p-values vs log Fold Change values for each of the genes that were differentially expressed
+
+abline(h=-log10(0.05), v=c(-1, 1), col="red", lty=2) 
+#use the abline to highlight the points that pass our thresholds of adjusted p-value being equal or less than 0.05 and absolute value of log Fold Change being bigger than 1.
+
+points(treatedTT1lumBHER2sigss$logFC, -log10(treatedTT1lumBHER2sigss$adj.P.Val), col="red", pch="*")
+```
+
+plot QQ plots adj p values:
+```{r}
+#qqnorm(ntreatedTT4lumBHER2$adj.P.Val, pch = 1, frame = FALSE)
+#qqline(ntreatedTT4lumBHER2$adj.P.Val, col = "steelblue", lwd = 2)
+
+#' QQ-plot of the simulated P-values for bulk, cancer model and random CPE model.
+nconvSort4 <- sort(-log10(ntreatedTT4lumBHER2$adj.P.Val), decreasing=T)
+nconvSort3 <- sort(-log10(ntreatedTT3lumBHER2$adj.P.Val), decreasing=T)
+nconvSort2 <- sort(-log10(ntreatedTT2lumBHER2$adj.P.Val), decreasing=T)
+nconvSort1 <- sort(-log10(ntreatedTT1lumBHER2$adj.P.Val), decreasing=T)
+convSort4 <- sort(-log10(treatedTT4lumBHER2$adj.P.Val), decreasing=T)
+convSort3 <- sort(-log10(treatedTT3lumBHER2$adj.P.Val), decreasing=T)
+convSort2 <- sort(-log10(treatedTT2lumBHER2$adj.P.Val), decreasing=T)
+convSort1 <- sort(-log10(treatedTT1lumBHER2$adj.P.Val), decreasing=T)
+
+nconvSort1s <- sort(-log10(ntreatedTT1lumBHER2s$adj.P.Val), decreasing=T)
+convSort1s <- sort(-log10(treatedTT1lumBHER2s$adj.P.Val), decreasing=T)
+nconvSort2s <- sort(-log10(ntreatedTT2lumBHER2s$adj.P.Val), decreasing=T)
+convSort2s <- sort(-log10(treatedTT2lumBHER2s$adj.P.Val), decreasing=T)
+nconvSort3s <- sort(-log10(ntreatedTT3lumBHER2s$adj.P.Val), decreasing=T)
+convSort3s <- sort(-log10(treatedTT3lumBHER2s$adj.P.Val), decreasing=T)
+
+convSort1ss <- sort(-log10(treatedTT1lumBHER2sigss$adj.P.Val), decreasing=T)
+#' Make a QQ plot 
+plot(-log10(1:length(ntreatedTT1lumBHER2s$adj.P.Val) / length(ntreatedTT1lumBHER2s$adj.P.Val)), nconvSort1s, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l",  pch=17)
+points(-log10(1:length(ntreatedTT2lumBHER2s$adj.P.Val) / length(ntreatedTT2lumBHER2s$adj.P.Val)), nconvSort2s, col="#ff99c2", pch=17)
+points(-log10(1:length(ntreatedTT3lumBHER2s$adj.P.Val) / length(ntreatedTT3lumBHER2s$adj.P.Val)), nconvSort3s, col="#cc0052", pch=17)
+points(-log10(1:length(treatedTT1lumBHER2ss$adj.P.Val) / length(treatedTT1lumBHER2ss$adj.P.Val)), convSort1ss, col="orange", pch=1)
+points(-log10(1:length(ntreatedTT4lumBHER2$adj.P.Val) / length(ntreatedTT4lumBHER2$adj.P.Val)), nconvSort4, col="#ccd9ff")
+points(-log10(1:length(ntreatedTT2lumBHER2$adj.P.Val) / length(ntreatedTT2lumBHER2$adj.P.Val)), nconvSort2, col="#668cff")
+points(-log10(1:length(ntreatedTT3lumBHER2$adj.P.Val) / length(ntreatedTT3lumBHER2$adj.P.Val)), nconvSort3, col="#0033cc")
+points(-log10(1:length(ntreatedTT1lumBHER2$adj.P.Val) / length(ntreatedTT1lumBHER2$adj.P.Val)), nconvSort1, col="#002699")
+abline(0,1, col="red")
+
+plot(-log10(1:length(ntreatedTT1lumBHER2$adj.P.Val) / length(ntreatedTT1lumBHER2$adj.P.Val)), nconvSort1, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT4lumBHER2$adj.P.Val) / length(ntreatedTT4lumBHER2$adj.P.Val)), nconvSort4, col="#ff4d94")
+points(-log10(1:length(ntreatedTT2lumBHER2$adj.P.Val) / length(ntreatedTT2lumBHER2$adj.P.Val)), nconvSort2, col="#ff99c2")
+points(-log10(1:length(ntreatedTT3lumBHER2$adj.P.Val) / length(ntreatedTT3lumBHER2$adj.P.Val)), nconvSort3, col="#cc0052")
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT1lumBHER2$adj.P.Val) / length(treatedTT1lumBHER2$adj.P.Val)), convSort1, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(treatedTT3lumBHER2$adj.P.Val) / length(treatedTT3lumBHER2$adj.P.Val)), convSort3, col="#ff4d94")
+points(-log10(1:length(treatedTT4lumBHER2$adj.P.Val) / length(treatedTT4lumBHER2$adj.P.Val)), convSort4, col="#ff99c2")
+points(-log10(1:length(treatedTT2lumBHER2$adj.P.Val) / length(treatedTT2lumBHER2$adj.P.Val)), convSort2, col="#cc0052")
+abline(0,1, col="red")
+
+
+plot(-log10(1:length(treatedTT2lumBHER2$adj.P.Val) / length(treatedTT2lumBHER2$adj.P.Val)), convSort2, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="orange", bty="l")
+points(-log10(1:length(ntreatedTT2lumBHER2$adj.P.Val) / length(ntreatedTT2lumBHER2$adj.P.Val)), nconvSort2, col="#809fff")
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT3lumBHER2$adj.P.Val) / length(treatedTT3lumBHER2$adj.P.Val)), convSort3, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT3lumBHER2$adj.P.Val) / length(ntreatedTT3lumBHER2$adj.P.Val)), nconvSort3, col="#0040ff", pch=4)
+abline(0,1, col="red")
+
+plot(-log10(1:length(treatedTT4lumBHER2$adj.P.Val) / length(treatedTT4lumBHER2$adj.P.Val)), convSort4, xlab="-Log10 P-Value (uniform distribution)", ylab="-Log10 P-Value (measured)", las=1, col="#ff0066", bty="l")
+points(-log10(1:length(ntreatedTT4lumBHER2$adj.P.Val) / length(ntreatedTT4lumBHER2$adj.P.Val)), nconvSort4, col="#0040ff", pch=4)
+abline(0,1, col="red")
+```
