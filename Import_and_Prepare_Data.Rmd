@@ -116,6 +116,8 @@ datasubtypes_my$CPE <- Tumor.purity.L$CPE
 datasubtypes_my$IHC <- Tumor.purity.L$IHC
 datasubtypes_my<-datasubtypes_my[complete.cases(datasubtypes_my$CPE),]
 
+save(datasubtypes_my, file="~/Documents/project/datasubtypes_my.Rdata")
+
 matrix_temp <- matrix_temp[,colnames(matrix_temp) %in% c("ENSEMBL_GeneID", datasubtypes_my$patients)]
 save(matrix_temp, file="~/Documents/project/matrix_temp.Rdata")
 lumAsub <- datasubtypes_my[which(datasubtypes_my$subtype == "BRCA.LumA"),]
@@ -140,7 +142,6 @@ dds1CPE <- estimateSizeFactors(dds1CPE)
 normalized_counts1CPE <- counts(dds1CPE, normalized=TRUE)
 yCPE <- as.data.frame(log2(normalized_counts1CPE+1.0))
 save(yCPE, datasubtypes_my, file="~/Documents/project/normalisedALLandDATASUBTYPES_MY.Rdata")
-
 ```
 
 
